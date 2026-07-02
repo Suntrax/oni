@@ -1,7 +1,5 @@
 # Oni
 
-**Continuation of [Kitsune](https://github.com/Suntrax/kitsune)** — A modern manga reading app for Android.
-
 ![Platform](https://img.shields.io/badge/Platform-Android-green.svg)
 ![Language](https://img.shields.io/badge/Language-Kotlin-blue.svg)
 ![MinSDK](https://img.shields.io/badge/MinSDK-26-orange.svg)
