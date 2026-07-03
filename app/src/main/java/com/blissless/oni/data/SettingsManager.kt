@@ -24,7 +24,7 @@ class SettingsManager(context: Context) {
     }
 
     fun getCheckUpdatesOnStart(): Boolean {
-        return prefs.getBoolean(KEY_CHECK_UPDATES, false)
+        return prefs.getBoolean(KEY_CHECK_UPDATES, true)
     }
 
     fun setCheckUpdatesOnStart(enabled: Boolean) {

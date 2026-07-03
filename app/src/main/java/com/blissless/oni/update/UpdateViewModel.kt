@@ -68,6 +68,10 @@ class UpdateViewModel(application: Application) : AndroidViewModel(application) 
         }
     }
 
+    fun setRelease(release: GitHubRelease) {
+        _uiState.value = UpdateUiState(release = release)
+    }
+
     fun setReleaseAndDownload(release: GitHubRelease) {
         _uiState.value = UpdateUiState(release = release)
         downloadUpdate()
@@ -87,8 +91,11 @@ class UpdateViewModel(application: Application) : AndroidViewModel(application) 
             _uiState.value = _uiState.value.copy(isDownloading = true, error = null)
             try {
                 val file = downloadApk(asset.downloadUrl, "oni-update")
-                _uiState.value = _uiState.value.copy(isDownloading = false, downloadedFile = file)
-                installApk(file)
+                val installed = installApk(file)
+                _uiState.value = _uiState.value.copy(
+                    isDownloading = false,
+                    downloadedFile = if (installed) file else null
+                )
             } catch (e: Exception) {
                 _uiState.value = _uiState.value.copy(isDownloading = false, error = e.message ?: "Download failed")
             }
@@ -126,18 +133,21 @@ class UpdateViewModel(application: Application) : AndroidViewModel(application) 
         apkFile
     }
 
-    private fun installApk(file: File) {
+    private fun installApk(file: File): Boolean {
         val ctx = getApplication<Application>()
         val uri = FileProvider.getUriForFile(ctx, "${ctx.packageName}.fileprovider", file)
-        val intent = Intent(Intent.ACTION_VIEW).apply {
-            setDataAndType(uri, "application/vnd.android.package-archive")
+        val intent = Intent(Intent.ACTION_INSTALL_PACKAGE).apply {
+            data = uri
             addFlags(Intent.FLAG_GRANT_READ_URI_PERMISSION)
             addFlags(Intent.FLAG_ACTIVITY_NEW_TASK)
+            putExtra(Intent.EXTRA_RETURN_RESULT, true)
         }
-        try {
+        return try {
             ctx.startActivity(intent)
+            true
         } catch (e: Exception) {
             _uiState.value = _uiState.value.copy(error = "Failed to open installer: ${e.message}")
+            false
         }
     }
 

@@ -95,10 +95,18 @@ fun SettingsScreen(viewModel: MainViewModel) {
 
     val updateViewModel: UpdateViewModel = viewModel()
     val updateState by updateViewModel.uiState.collectAsState()
+    val pendingUpdate by viewModel.pendingUpdateRelease.collectAsState()
 
     LaunchedEffect(Unit) {
         viewModel.checkAnilistSession()
         viewModel.discoverExtensions()
+    }
+
+    LaunchedEffect(pendingUpdate) {
+        val release = pendingUpdate
+        if (release != null && updateState.release == null && !updateState.isChecking) {
+            updateViewModel.setRelease(release)
+        }
     }
 
     var showLogoutDialog by remember { mutableStateOf(false) }

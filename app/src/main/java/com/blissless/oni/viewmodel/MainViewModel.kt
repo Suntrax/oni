@@ -5,6 +5,7 @@ import android.content.Intent
 import android.content.pm.PackageManager
 import android.net.Uri
 import android.util.Log
+import android.widget.Toast
 import androidx.lifecycle.ViewModel
 import androidx.lifecycle.ViewModelProvider
 import androidx.lifecycle.viewModelScope
@@ -187,6 +188,9 @@ class MainViewModel(private val context: Context) : ViewModel() {
                 }
                 if (cmp > 0) {
                     _pendingUpdateRelease.value = release
+                    withContext(Dispatchers.Main) {
+                        Toast.makeText(context, "Update available: ${release.tagName}", Toast.LENGTH_LONG).show()
+                    }
                 }
             } catch (_: Exception) { }
         }
