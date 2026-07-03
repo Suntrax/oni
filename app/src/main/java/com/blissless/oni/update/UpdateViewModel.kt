@@ -136,11 +136,10 @@ class UpdateViewModel(application: Application) : AndroidViewModel(application) 
     private fun installApk(file: File): Boolean {
         val ctx = getApplication<Application>()
         val uri = FileProvider.getUriForFile(ctx, "${ctx.packageName}.fileprovider", file)
-        val intent = Intent(Intent.ACTION_INSTALL_PACKAGE).apply {
-            data = uri
+        val intent = Intent(Intent.ACTION_VIEW).apply {
+            setDataAndType(uri, "application/vnd.android.package-archive")
             addFlags(Intent.FLAG_GRANT_READ_URI_PERMISSION)
             addFlags(Intent.FLAG_ACTIVITY_NEW_TASK)
-            putExtra(Intent.EXTRA_RETURN_RESULT, true)
         }
         return try {
             ctx.startActivity(intent)
