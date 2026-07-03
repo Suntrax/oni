@@ -91,13 +91,7 @@ class MainViewModel(private val context: Context) : ViewModel() {
     private val _nextChapterToRead = MutableStateFlow<Int?>(null)
     val nextChapterToRead: StateFlow<Int?> = _nextChapterToRead.asStateFlow()
 
-    private val _isPreloadingNext = MutableStateFlow(false)
-    val isPreloadingNext: StateFlow<Boolean> = _isPreloadingNext.asStateFlow()
-
-    private val chapterImageCache = mutableMapOf<String, ChapterImages>()
-    private var preloadedNextChapter: ChapterImages? = null
     private var lastSearchedQuery: String = ""
-    private var lastLoadedMangaId: String? = null
     private var searchJob: kotlinx.coroutines.Job? = null
     
     private var currentMangaId: String? = null
@@ -200,15 +194,6 @@ class MainViewModel(private val context: Context) : ViewModel() {
 
     fun getCurrentMangaCoverUrl(): String? = currentMangaCoverUrl
 
-    private fun clearCachesIfNeeded(newMangaId: String) {
-        if (lastLoadedMangaId != null && lastLoadedMangaId != newMangaId) {
-            Log.d("CACHE", "Switching manga, clearing old cache")
-            chapterImageCache.clear()
-            preloadedNextChapter = null
-        }
-        lastLoadedMangaId = newMangaId
-    }
-
     private fun log(tag: String, msg: String) {
         Log.d("ViewModel", "[$tag] $msg")
     }
@@ -266,7 +251,6 @@ class MainViewModel(private val context: Context) : ViewModel() {
         viewModelScope.launch {
             _isLoading.value = true
             refreshTrackingLists()
-            preloadContinueReading()
             // Sync from AniList on app start (only once)
             if (!hasSyncedOnStart && anilistManager.isLoggedIn()) {
                 hasSyncedOnStart = true
@@ -283,40 +267,6 @@ class MainViewModel(private val context: Context) : ViewModel() {
                 }
             )
             _isLoading.value = false
-        }
-    }
-    
-    fun preloadContinueReading() {
-        Log.d("PRELOAD", "=== preloadContinueReading() START ===")
-        val continueReading = trackingManager.getContinueReading()
-        Log.d("PRELOAD", "Continue reading count: ${continueReading.size}")
-        val firstManga = continueReading.firstOrNull() ?: run {
-            Log.d("PRELOAD", "No manga in continue reading - returning")
-            return
-        }
-        Log.d("PRELOAD", "First manga: ${firstManga.title}")
-        Log.d("PRELOAD", "Current chapter index: ${firstManga.currentChapterIndex}")
-        
-        viewModelScope.launch {
-            Log.d("PRELOAD", "Fetching chapters for: ${firstManga.mangaUrl}")
-            val chaptersResult = repository.getChapters(firstManga.mangaUrl)
-            chaptersResult.fold(
-                onSuccess = { chapterData ->
-                    val chapterList = chapterData.chapters
-                    val savedIndex = firstManga.currentChapterIndex
-                    val nextChapterIndex = if (savedIndex > 0) savedIndex + 1 else 0
-                    Log.d("PRELOAD", "Found ${chapterList.size} chapters (DB: ${chapterData.dbChapters}, DBZ: ${chapterData.dbzChapters}), target: $nextChapterIndex (saved=$savedIndex)")
-                    val chapter = chapterList.getOrNull(nextChapterIndex)
-                    if (chapter != null) {
-                        Log.d("PRELOAD", "Found next chapter: ${chapter.url} (preloading via extension not available at startup)")
-                    } else {
-                        Log.d("PRELOAD", "No chapter at index $nextChapterIndex")
-                    }
-                },
-                onFailure = { e ->
-                    Log.d("PRELOAD", "FAILED to get chapters: ${e.message}")
-                }
-            )
         }
     }
     
@@ -524,39 +474,6 @@ class MainViewModel(private val context: Context) : ViewModel() {
         }
     }
     
-    fun preloadNextChapter() {
-        val nextIndex = _selectedChapterIndex.value + 1
-        val nextChapter = _chapters.value.getOrNull(nextIndex) ?: return
-        if (preloadedNextChapter != null) return
-
-        val authority = _selectedExtensionAuthority.value ?: return
-        val title = nextChapter.title ?: ""
-        val chapterParam = extractChapterNumberString(title)
-        val mangaTitle = currentMangaTitle
-            ?: _mangaDetail.value?.englishTitle
-            ?: _mangaDetail.value?.title
-            ?: ""
-        if (mangaTitle.isBlank() || chapterParam.isBlank()) return
-
-        _isPreloadingNext.value = true
-        viewModelScope.launch {
-            val result = withContext(Dispatchers.IO) {
-                fetchImagesFromExtension(mangaTitle, chapterParam, authority)
-            }
-            result.onSuccess { images ->
-                preloadedNextChapter = ChapterImages(nextChapter.url, images)
-                log("PRELOAD", "Next chapter preloaded: ${images.size} images")
-            }
-            _isPreloadingNext.value = false
-        }
-    }
-    
-    fun getPreloadedNextChapter(): ChapterImages? {
-        val images = preloadedNextChapter
-        preloadedNextChapter = null
-        return images
-    }
-    
     fun onChapterScrollProgress(scrollPercent: Float) {
         val threshold = _anilistSyncThreshold.value / 100f
         if (scrollPercent >= threshold && _selectedChapterIndex.value >= 0) {
@@ -712,7 +629,6 @@ class MainViewModel(private val context: Context) : ViewModel() {
             manga.url.substringAfter("/manga/").substringBefore("?"),
             manga.url
         )
-        clearCachesIfNeeded(mangaId)
         currentMangaId = mangaId
         currentMangaTitle = manga.title
         currentMangaCoverUrl = manga.coverUrl
@@ -833,7 +749,6 @@ class MainViewModel(private val context: Context) : ViewModel() {
                     val baseMangaId = mangaUrl.substringAfter("/manga/").substringBefore("?")
                     val uniqueMangaId = extractUniqueMangaId(baseMangaId, mangaUrl)
                     Log.d("CHAPTERS", "Using mangaId: $uniqueMangaId")
-                    clearCachesIfNeeded(uniqueMangaId)
                     Log.d("CHAPTERS", "Total chapters: $totalChapters")
                     
                     // Update detail with correct count
@@ -882,13 +797,7 @@ class MainViewModel(private val context: Context) : ViewModel() {
             }
             log("SELECT", "Selected chapter $index: ${chapter.url}")
             
-            val preloaded = getPreloadedNextChapter()
-            if (preloaded != null && chapterImageCache[chapter.url] == null) {
-                chapterImageCache[chapter.url] = preloaded
-            }
-            
             loadChapterImages(chapter.url)
-            preloadNextChapter()
         }
     }
 
@@ -904,6 +813,8 @@ class MainViewModel(private val context: Context) : ViewModel() {
                 .appendQueryParameter("anime", mangaTitle)
                 .appendQueryParameter("chapter", chapterParam)
                 .build()
+
+            log("EXT", "Querying extension: manga='$mangaTitle' chapter='$chapterParam' authority='$authority'")
 
             val cursor = context.contentResolver.query(uri, null, null, null, null)
                 ?: return Result.failure(Exception("Extension returned null cursor"))
@@ -926,23 +837,17 @@ class MainViewModel(private val context: Context) : ViewModel() {
                     images.add(imagesArray.getString(i))
                 }
                 if (images.isEmpty()) return Result.failure(Exception("Chapter has no images"))
+                log("EXT", "Extension returned ${images.size} images, first: ${images.firstOrNull()?.take(80)}")
                 Result.success(images)
             }
         } catch (e: Exception) {
+            log("EXT", "Extension threw: ${e.message}")
             Result.failure(e)
         }
     }
 
     private fun loadChapterImages(chapterUrl: String) {
         log("LOAD", "Attempting to load: $chapterUrl")
-        log("LOAD", "Cache keys: ${chapterImageCache.keys}")
-        chapterImageCache[chapterUrl]?.let { cached ->
-            log("CACHE", "HIT! Using cached images for: $chapterUrl with ${cached.images.size} images")
-            _chapterImages.value = UiState.Success(cached)
-            _isLoading.value = false
-            return
-        }
-        log("CACHE", "MISS! Not in cache, will fetch")
 
         viewModelScope.launch {
             _chapterImages.value = UiState.Loading
@@ -957,26 +862,26 @@ class MainViewModel(private val context: Context) : ViewModel() {
                     ?: _mangaDetail.value?.title
                     ?: ""
                 if (mangaTitle.isNotBlank() && chapterParam.isNotBlank()) {
-                    val extResult = kotlinx.coroutines.withContext(Dispatchers.IO) {
+                    log("LOAD", "Fetching: title='$title' -> chapterParam='$chapterParam' mangaTitle='$mangaTitle'")
+                    val extResult = withContext(Dispatchers.IO) {
                         fetchImagesFromExtension(mangaTitle, chapterParam, authority)
                     }
                     extResult.onSuccess { images ->
                         val ci = ChapterImages(chapterUrl, images)
-                        chapterImageCache[chapterUrl] = ci
                         log("LOAD", "Extension success: ${images.size} images for $chapterUrl")
                         _chapterImages.value = UiState.Success(ci)
                         _isLoading.value = false
                         return@launch
                     }
                     log("LOAD", "Extension failed: ${extResult.exceptionOrNull()?.message}")
-                    }
                 }
+            }
 
-                _chapterImages.value = UiState.Error(
-                    if (authority == null) "No extension selected. Install and select an extension in Settings."
-                    else "Failed to load chapter images from extension"
-                )
-                _isLoading.value = false
+            _chapterImages.value = UiState.Error(
+                if (authority == null) "No extension selected. Install and select an extension in Settings."
+                else "Failed to load chapter images from extension"
+            )
+            _isLoading.value = false
         }
     }
 

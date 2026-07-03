@@ -30,7 +30,8 @@ import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.input.pointer.pointerInput
 import androidx.compose.ui.unit.dp
 import com.blissless.oni.ui.theme.BlueAccent
-import com.blissless.oni.ui.theme.DarkSurface
+import com.blissless.oni.ui.theme.DarkCard
+import com.blissless.oni.ui.theme.GlassStroke
 import com.blissless.oni.ui.theme.SilverDark
 
 @Composable
@@ -48,10 +49,10 @@ fun BottomNavBar(
             .fillMaxWidth()
             .padding(start = 48.dp, end = 48.dp, bottom = 4.dp),
         shape = MaterialTheme.shapes.extraLarge,
-        color = DarkSurface,
-        tonalElevation = 4.dp,
-        shadowElevation = 8.dp,
-        border = BorderStroke(1.dp, SilverDark.copy(alpha = 0.15f))
+        color = DarkCard,
+        tonalElevation = 0.dp,
+        shadowElevation = 12.dp,
+        border = BorderStroke(0.5.dp, GlassStroke)
     ) {
         Row(
             modifier = Modifier

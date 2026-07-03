@@ -75,8 +75,6 @@ class MangaRepository(private val context: Context) {
         .readTimeout(30, TimeUnit.SECONDS)
         .build()
     
-    private val chapterInfoCache = mutableMapOf<String, ChapterInfoWithSplit>()
-
     private fun log(tag: String, msg: String) {
         Log.d("MangaRepo", "[$tag] $msg")
     }
@@ -250,12 +248,6 @@ class MangaRepository(private val context: Context) {
         val mangaId = mangaUrl.substringAfter("/manga/").substringBefore("?")
         val apiUrl = "$baseUrl/api/manga/allChapters?mangaId=$mangaId"
         
-        chapterInfoCache[apiUrl]?.let { cached ->
-            log("CHAPTERS", "Cache HIT for: $apiUrl")
-            return@withContext Result.success(cached)
-        }
-        log("CHAPTERS", "Cache MISS for: $apiUrl")
-        
         log("CHAPTERS", "API URL: $apiUrl")
         log("CHAPTERS", "Full manga URL: $mangaUrl")
         log("CHAPTERS", "Extracted mangaId: $mangaId")
@@ -324,8 +316,6 @@ class MangaRepository(private val context: Context) {
             log("CHAPTERS", "Found ${displayChapters.size} chapters")
             
             val chapterInfo = ChapterInfoWithSplit(displayChapters, dbChapters.size, dbzChapters.size)
-            chapterInfoCache[apiUrl] = chapterInfo
-            log("CHAPTERS", "Cached chapter info for: $apiUrl")
             Result.success(chapterInfo)
         } catch (e: Exception) {
             log("CHAPTERS", "Error: ${e.message}")

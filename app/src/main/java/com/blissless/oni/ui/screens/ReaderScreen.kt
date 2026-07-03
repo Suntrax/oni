@@ -1,46 +1,53 @@
 package com.blissless.oni.ui.screens
 
 import androidx.activity.compose.BackHandler
+import androidx.compose.animation.AnimatedVisibility
+import androidx.compose.animation.core.animateFloatAsState
+import androidx.compose.animation.core.tween
+import androidx.compose.animation.expandVertically
+import androidx.compose.animation.fadeIn
+import androidx.compose.animation.fadeOut
+import androidx.compose.animation.shrinkVertically
+import androidx.compose.foundation.BorderStroke
 import androidx.compose.foundation.background
 import androidx.compose.foundation.border
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.interaction.MutableInteractionSource
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
-import androidx.compose.foundation.layout.fillMaxHeight
-import androidx.compose.foundation.layout.fillMaxSize
-import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.PaddingValues
 import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.Spacer
+import androidx.compose.foundation.layout.fillMaxHeight
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
-import androidx.compose.foundation.layout.heightIn
 import androidx.compose.foundation.layout.height
+import androidx.compose.foundation.layout.heightIn
 import androidx.compose.foundation.layout.padding
-import androidx.compose.foundation.layout.width
+import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.lazy.LazyColumn
-import androidx.compose.foundation.lazy.items
 import androidx.compose.foundation.lazy.itemsIndexed
 import androidx.compose.foundation.lazy.rememberLazyListState
 import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.shape.RoundedCornerShape
+import androidx.compose.foundation.text.BasicTextField
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.automirrored.filled.ArrowBack
-import androidx.compose.material.icons.filled.Check
+import androidx.compose.material.icons.filled.Close
 import androidx.compose.material.icons.filled.KeyboardArrowDown
-import androidx.compose.material.icons.filled.KeyboardArrowUp
 import androidx.compose.material.icons.filled.PlayArrow
-import androidx.compose.material.icons.filled.Settings
+import androidx.compose.material.icons.filled.Search
 import androidx.compose.material.icons.filled.SkipNext
 import androidx.compose.material.icons.filled.SkipPrevious
 import androidx.compose.material3.Button
+import androidx.compose.material3.ButtonDefaults
 import androidx.compose.material3.Card
 import androidx.compose.material3.CardDefaults
 import androidx.compose.material3.CircularProgressIndicator
 import androidx.compose.material3.ExperimentalMaterial3Api
+import androidx.compose.material3.HorizontalDivider
 import androidx.compose.material3.Icon
 import androidx.compose.material3.IconButton
 import androidx.compose.material3.MaterialTheme
@@ -49,42 +56,46 @@ import androidx.compose.material3.Text
 import androidx.compose.material3.TopAppBar
 import androidx.compose.material3.TopAppBarDefaults
 import androidx.compose.runtime.Composable
-import androidx.compose.animation.AnimatedVisibility
-import androidx.compose.animation.core.animateFloatAsState
-import androidx.compose.animation.core.tween
-import androidx.compose.animation.expandVertically
-import androidx.compose.animation.fadeIn
-import androidx.compose.animation.fadeOut
-import androidx.compose.animation.shrinkVertically
-import androidx.compose.animation.core.tween
 import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.collectAsState
-import androidx.compose.runtime.derivedStateOf
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
-import androidx.compose.runtime.rememberCoroutineScope
-import androidx.compose.runtime.snapshotFlow
 import androidx.compose.runtime.setValue
-import kotlinx.coroutines.launch
+import androidx.compose.runtime.snapshotFlow
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.draw.clip
+import androidx.compose.ui.graphics.Brush
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.graphicsLayer
 import androidx.compose.ui.layout.ContentScale
+import androidx.compose.ui.text.TextStyle
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
+import androidx.compose.ui.unit.sp
 import coil.compose.AsyncImage
 import com.blissless.oni.data.ChapterInfo
 import com.blissless.oni.viewmodel.MainViewModel
 import com.blissless.oni.viewmodel.UiState
 import com.blissless.oni.ui.theme.BlueAccent
+import com.blissless.oni.ui.theme.BlueLight
+import com.blissless.oni.ui.theme.ChapterCounterBg
+import com.blissless.oni.ui.theme.CurrentBlueGlow
 import com.blissless.oni.ui.theme.DarkBackground
-import com.blissless.oni.ui.theme.DarkSurface
+import com.blissless.oni.ui.theme.DarkCard
 import com.blissless.oni.ui.theme.DarkSurfaceVariant
+import com.blissless.oni.ui.theme.GlassStroke
+import com.blissless.oni.ui.theme.GlassStrokeFocused
+import com.blissless.oni.ui.theme.GradientBlue
+import com.blissless.oni.ui.theme.GradientPurple
+import com.blissless.oni.ui.theme.ProgressTrackBg
+import com.blissless.oni.ui.theme.ReadGreen
+import com.blissless.oni.ui.theme.SearchBarBg
 import com.blissless.oni.ui.theme.SilverDark
 import com.blissless.oni.ui.theme.SilverLight
+import kotlinx.coroutines.delay
 
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
@@ -109,12 +120,6 @@ fun ReaderScreen(
         isShowingChapterList = selectedIndex < 0
         if (selectedIndex < 0) {
             viewModel.refreshTrackingLists()
-        }
-    }
-    
-    LaunchedEffect(chapterImages) {
-        if (chapterImages is UiState.Success && !isShowingChapterList) {
-            viewModel.preloadNextChapter()
         }
     }
     
@@ -368,47 +373,109 @@ fun ChapterListWithGroups(
 ) {
     if (chapters.isEmpty()) {
         Box(
-            modifier = modifier.fillMaxSize().background(Color.Black),
+            modifier = modifier.fillMaxSize().background(DarkBackground),
             contentAlignment = Alignment.Center
         ) {
-            Text("No chapters found", color = Color.White)
+            Column(horizontalAlignment = Alignment.CenterHorizontally) {
+                Text(
+                    "No chapters found",
+                    color = SilverDark,
+                    fontSize = 15.sp
+                )
+                Spacer(modifier = Modifier.height(4.dp))
+                Text(
+                    "They may not be available yet",
+                    color = SilverDark.copy(alpha = 0.5f),
+                    fontSize = 13.sp
+                )
+            }
         }
     } else {
-        val groupedChapters = groupChaptersByMainChapter(chapters)
+        var searchQuery by remember { mutableStateOf("") }
+        val groupedChapters = remember(chapters) { groupChaptersByMainChapter(chapters) }
+
+        val filteredGroups = remember(groupedChapters, searchQuery) {
+            if (searchQuery.isBlank()) groupedChapters
+            else groupedChapters.mapNotNull { (key, list) ->
+                val filtered = list.filter { (_, chapter) ->
+                    chapter.title?.contains(searchQuery, ignoreCase = true) == true
+                }
+                if (filtered.isNotEmpty()) key to filtered else null
+            }
+        }
+
         val listState = rememberLazyListState()
-        
         val chapterToExpand = if (selectedIndex >= 0) selectedIndex else nextChapterToRead
-        
+        val readCount = readChapterIndices.size
+        val totalCount = chapters.size
+        val progress = if (totalCount > 0) readCount.toFloat() / totalCount else 0f
+
         LaunchedEffect(chapters, chapterToExpand) {
             if (chapterToExpand != null && chapterToExpand >= 0) {
-                val targetGroupIndex = groupedChapters.indexOfFirst { (_, groupList) ->
+                val targetGroupIndex = filteredGroups.indexOfFirst { (_, groupList) ->
                     groupList.any { it.first == chapterToExpand }
                 }
                 if (targetGroupIndex >= 0) {
-                    kotlinx.coroutines.delay(100)
-                    listState.animateScrollToItem(maxOf(0, targetGroupIndex))
+                    delay(100)
+                    listState.animateScrollToItem(maxOf(0, targetGroupIndex + 2))
                 }
             }
         }
-        
+
         LazyColumn(
             state = listState,
-            modifier = modifier.fillMaxSize().background(Color.Black),
-            contentPadding = PaddingValues(16.dp),
-            verticalArrangement = Arrangement.spacedBy(8.dp)
+            modifier = modifier.fillMaxSize().background(DarkBackground),
+            contentPadding = PaddingValues(horizontal = 16.dp, vertical = 12.dp),
+            verticalArrangement = Arrangement.spacedBy(10.dp)
         ) {
-            groupedChapters.forEachIndexed { index, (groupKey, groupList) ->
-                val containsTarget = groupList.any { it.first == chapterToExpand }
-                item(key = "chapter_group_$index") {
-                    ChapterGroup(
-                        groupKey = groupKey,
-                        groupChapters = groupList,
-                        selectedIndex = selectedIndex,
-                        readChapterIndices = readChapterIndices,
-                        nextChapterToRead = nextChapterToRead,
-                        initiallyExpanded = containsTarget,
-                        onChapterClick = onChapterClick
-                    )
+            item(key = "header") {
+                ChapterListHeader(
+                    readCount = readCount,
+                    totalCount = totalCount,
+                    progress = progress,
+                    nextChapterToRead = nextChapterToRead,
+                    onContinueReading = {
+                        nextChapterToRead?.let { onChapterClick(it) }
+                    }
+                )
+            }
+
+            item(key = "search") {
+                ChapterSearchBar(
+                    query = searchQuery,
+                    onQueryChange = { searchQuery = it }
+                )
+            }
+
+            if (filteredGroups.isEmpty() && searchQuery.isNotBlank()) {
+                item(key = "no_results") {
+                    Box(
+                        modifier = Modifier
+                            .fillMaxWidth()
+                            .padding(vertical = 48.dp),
+                        contentAlignment = Alignment.Center
+                    ) {
+                        Text(
+                            "No chapters match \"$searchQuery\"",
+                            color = SilverDark,
+                            fontSize = 14.sp
+                        )
+                    }
+                }
+            } else {
+                filteredGroups.forEachIndexed { index, (groupKey, groupList) ->
+                    val containsTarget = groupList.any { it.first == chapterToExpand }
+                    item(key = "chapter_group_$index") {
+                        ChapterGroup(
+                            groupKey = groupKey,
+                            groupChapters = groupList,
+                            selectedIndex = selectedIndex,
+                            readChapterIndices = readChapterIndices,
+                            nextChapterToRead = nextChapterToRead,
+                            initiallyExpanded = containsTarget,
+                            onChapterClick = onChapterClick
+                        )
+                    }
                 }
             }
         }
@@ -417,15 +484,15 @@ fun ChapterListWithGroups(
 
 private fun groupChaptersByMainChapter(chapters: List<ChapterInfo>): List<Pair<String, List<Pair<Int, ChapterInfo>>>> {
     val indexedChapters = chapters.mapIndexed { index, chapter -> index to chapter }
-    
+
     val byMainChapter = indexedChapters.groupBy { (_, chapter) ->
         val title = chapter.title ?: ""
         extractMainChapterNumber(title)
     }.toSortedMap()
-    
+
     val result = mutableListOf<Pair<String, List<Pair<Int, ChapterInfo>>>>()
     val hasChapterZero = byMainChapter.containsKey(0)
-    
+
     byMainChapter.forEach { (mainChapter, items) ->
         val rangeStart = if (hasChapterZero && mainChapter == 0) {
             0
@@ -434,12 +501,12 @@ private fun groupChaptersByMainChapter(chapters: List<ChapterInfo>): List<Pair<S
         } else {
             ((mainChapter - 1) / 20) * 20 + 1
         }
-        
-        val existingGroup = result.find { (key, _) -> 
+
+        val existingGroup = result.find { (key, _) ->
             val existingRangeStart = key.substringAfter("Ch. ").substringBefore(" - ").toIntOrNull() ?: -1
             existingRangeStart == rangeStart
         }
-        
+
         if (existingGroup != null) {
             val (existingKey, existingItems) = existingGroup
             val index = result.indexOf(existingGroup)
@@ -456,9 +523,9 @@ private fun groupChaptersByMainChapter(chapters: List<ChapterInfo>): List<Pair<S
             result.add(displayKey to items)
         }
     }
-    
-    return result.sortedBy { 
-        it.first.substringAfter("Ch. ").substringBefore(" - ").toIntOrNull() ?: 0 
+
+    return result.sortedBy {
+        it.first.substringAfter("Ch. ").substringBefore(" - ").toIntOrNull() ?: 0
     }
 }
 
@@ -469,7 +536,7 @@ private fun extractMainChapterNumber(title: String): Int {
         Regex("^(\\d+)"),
         Regex("(\\d+)(?:\\.\\d+)?")
     )
-    
+
     for (pattern in patterns) {
         val match = pattern.find(title)
         if (match != null) {
@@ -478,6 +545,189 @@ private fun extractMainChapterNumber(title: String): Int {
         }
     }
     return 0
+}
+
+private fun extractChapterNum(title: String): String {
+    val patterns = listOf(
+        Regex("Chapter\\s*(\\d+(?:\\.\\d+)?)"),
+        Regex("Ch\\s*\\.\\s*(\\d+(?:\\.\\d+)?)"),
+        Regex("^(\\d+(?:\\.\\d+)?)"),
+        Regex("(\\d+(?:\\.\\d+)?)")
+    )
+    for (pattern in patterns) {
+        val match = pattern.find(title)
+        if (match != null) {
+            val numStr = match.groupValues[1].trimEnd('.')
+            if (numStr.isNotBlank()) return numStr
+        }
+    }
+    return "?"
+}
+
+@Composable
+private fun ChapterListHeader(
+    readCount: Int,
+    totalCount: Int,
+    progress: Float,
+    nextChapterToRead: Int?,
+    onContinueReading: () -> Unit
+) {
+    Column {
+        Row(
+            modifier = Modifier.fillMaxWidth(),
+            horizontalArrangement = Arrangement.SpaceBetween,
+            verticalAlignment = Alignment.CenterVertically
+        ) {
+            Column {
+                Text(
+                    text = "Chapters",
+                    style = MaterialTheme.typography.titleLarge,
+                    color = Color.White,
+                    fontWeight = FontWeight.Bold,
+                    letterSpacing = 0.5.sp
+                )
+                Text(
+                    text = "$readCount of $totalCount read",
+                    style = MaterialTheme.typography.bodySmall,
+                    color = SilverDark,
+                    letterSpacing = 0.2.sp
+                )
+            }
+
+            if (progress > 0f) {
+                Text(
+                    text = "${(progress * 100).toInt()}%",
+                    style = MaterialTheme.typography.labelLarge,
+                    color = BlueLight,
+                    fontWeight = FontWeight.SemiBold
+                )
+            }
+        }
+
+        Spacer(modifier = Modifier.height(12.dp))
+
+        Box(
+            modifier = Modifier
+                .fillMaxWidth()
+                .height(4.dp)
+                .clip(RoundedCornerShape(2.dp))
+                .background(ProgressTrackBg)
+        ) {
+            Box(
+                modifier = Modifier
+                    .fillMaxWidth(progress)
+                    .fillMaxHeight()
+                    .background(
+                        Brush.horizontalGradient(
+                            colors = listOf(GradientBlue, GradientPurple)
+                        ),
+                        RoundedCornerShape(2.dp)
+                    )
+            )
+        }
+
+        if (nextChapterToRead != null && nextChapterToRead < totalCount) {
+            Spacer(modifier = Modifier.height(16.dp))
+
+            Button(
+                onClick = onContinueReading,
+                modifier = Modifier
+                    .fillMaxWidth()
+                    .height(52.dp),
+                shape = RoundedCornerShape(14.dp),
+                colors = ButtonDefaults.buttonColors(containerColor = BlueAccent),
+                elevation = ButtonDefaults.buttonElevation(defaultElevation = 8.dp)
+            ) {
+                Icon(
+                    Icons.Default.PlayArrow,
+                    contentDescription = null,
+                    modifier = Modifier.size(20.dp)
+                )
+                Spacer(modifier = Modifier.width(10.dp))
+                Text(
+                    text = "Continue Reading",
+                    fontWeight = FontWeight.Bold,
+                    letterSpacing = 0.3.sp
+                )
+                Spacer(modifier = Modifier.width(4.dp))
+                Text(
+                    text = "· Ch. ${nextChapterToRead + 1}",
+                    fontWeight = FontWeight.Medium,
+                    color = Color.White.copy(alpha = 0.8f)
+                )
+            }
+        }
+    }
+}
+
+@Composable
+private fun ChapterSearchBar(
+    query: String,
+    onQueryChange: (String) -> Unit
+) {
+    Box(
+        modifier = Modifier
+            .fillMaxWidth()
+            .height(44.dp)
+            .clip(RoundedCornerShape(12.dp))
+            .background(SearchBarBg)
+            .then(
+                if (query.isNotEmpty()) Modifier.border(1.dp, GlassStrokeFocused, RoundedCornerShape(12.dp))
+                else Modifier.border(1.dp, GlassStroke, RoundedCornerShape(12.dp))
+            )
+    ) {
+        Row(
+            modifier = Modifier
+                .fillMaxSize()
+                .padding(horizontal = 14.dp),
+            verticalAlignment = Alignment.CenterVertically
+        ) {
+            Icon(
+                Icons.Default.Search,
+                contentDescription = "Search",
+                tint = SilverDark,
+                modifier = Modifier.size(18.dp)
+            )
+            Spacer(modifier = Modifier.width(10.dp))
+
+            BasicTextField(
+                value = query,
+                onValueChange = onQueryChange,
+                modifier = Modifier.weight(1f),
+                singleLine = true,
+                textStyle = TextStyle(
+                    color = Color.White,
+                    fontSize = 14.sp
+                ),
+                decorationBox = { innerTextField ->
+                    Box {
+                        if (query.isEmpty()) {
+                            Text(
+                                "Search chapters...",
+                                color = SilverDark,
+                                fontSize = 14.sp
+                            )
+                        }
+                        innerTextField()
+                    }
+                }
+            )
+
+            if (query.isNotEmpty()) {
+                IconButton(
+                    onClick = { onQueryChange("") },
+                    modifier = Modifier.size(20.dp)
+                ) {
+                    Icon(
+                        Icons.Default.Close,
+                        contentDescription = "Clear",
+                        tint = SilverDark,
+                        modifier = Modifier.size(16.dp)
+                    )
+                }
+            }
+        }
+    }
 }
 
 @Composable
@@ -492,37 +742,33 @@ fun ChapterGroup(
 ) {
     var expanded by remember { mutableStateOf(initiallyExpanded) }
     LaunchedEffect(initiallyExpanded) {
-        if (initiallyExpanded) {
-            expanded = true
-        }
+        if (initiallyExpanded) expanded = true
     }
-    val interactionSource = remember { MutableInteractionSource() }
+
     val rotationAngle by animateFloatAsState(
         targetValue = if (expanded) 180f else 0f,
-        animationSpec = tween(200),
+        animationSpec = tween(250),
         label = "rotation"
     )
+
+    val readInGroup = groupChapters.count { (index, _) -> index in readChapterIndices }
 
     Card(
         modifier = Modifier
             .fillMaxWidth()
             .clickable(
-                interactionSource = interactionSource,
+                interactionSource = remember { MutableInteractionSource() },
                 indication = null
             ) { expanded = !expanded },
-        colors = CardDefaults.cardColors(
-            containerColor = DarkSurfaceVariant
-        ),
-        shape = RoundedCornerShape(8.dp),
-        elevation = CardDefaults.cardElevation(defaultElevation = 0.dp)
+        shape = RoundedCornerShape(16.dp),
+        colors = CardDefaults.cardColors(containerColor = DarkCard),
+        elevation = CardDefaults.cardElevation(defaultElevation = 0.dp),
+        border = BorderStroke(0.5.dp, GlassStroke)
     ) {
-        Column(
-            modifier = Modifier.background(DarkSurfaceVariant)
-        ) {
+        Column {
             Row(
                 modifier = Modifier
                     .fillMaxWidth()
-                    .background(DarkSurfaceVariant)
                     .padding(16.dp),
                 horizontalArrangement = Arrangement.SpaceBetween,
                 verticalAlignment = Alignment.CenterVertically
@@ -532,33 +778,68 @@ fun ChapterGroup(
                         text = groupKey,
                         style = MaterialTheme.typography.titleSmall,
                         color = Color.White,
-                        fontWeight = FontWeight.Bold
+                        fontWeight = FontWeight.Bold,
+                        letterSpacing = 0.3.sp
                     )
+                    Spacer(modifier = Modifier.height(2.dp))
+                    Row(verticalAlignment = Alignment.CenterVertically) {
+                        Text(
+                            text = "${groupChapters.size} chapters",
+                            style = MaterialTheme.typography.bodySmall,
+                            color = SilverDark
+                        )
+                        if (readInGroup > 0) {
+                            Spacer(modifier = Modifier.width(6.dp))
+                            Text(
+                                text = "· $readInGroup read",
+                                style = MaterialTheme.typography.bodySmall,
+                                color = ReadGreen.copy(alpha = 0.7f)
+                            )
+                        }
+                    }
+                }
+
+                Box(
+                    modifier = Modifier
+                        .background(ChapterCounterBg, RoundedCornerShape(8.dp))
+                        .padding(horizontal = 10.dp, vertical = 4.dp)
+                ) {
                     Text(
-                        text = "${groupChapters.size} chapters",
-                        style = MaterialTheme.typography.bodySmall,
-                        color = Color.White.copy(alpha = 0.6f)
+                        text = "${groupChapters.size}",
+                        style = MaterialTheme.typography.labelSmall,
+                        color = SilverLight,
+                        fontWeight = FontWeight.SemiBold
                     )
                 }
+
+                Spacer(modifier = Modifier.width(8.dp))
+
                 Icon(
                     imageVector = Icons.Default.KeyboardArrowDown,
                     contentDescription = if (expanded) "Collapse" else "Expand",
-                    tint = Color.White.copy(alpha = 0.6f),
+                    tint = SilverDark,
                     modifier = Modifier.graphicsLayer { rotationZ = rotationAngle }
                 )
             }
 
             AnimatedVisibility(
                 visible = expanded,
-                enter = expandVertically(animationSpec = tween(200)) + fadeIn(animationSpec = tween(200)),
-                exit = shrinkVertically(animationSpec = tween(200)) + fadeOut(animationSpec = tween(200))
+                enter = fadeIn(animationSpec = tween(200)),
+                exit = fadeOut(animationSpec = tween(100))
             ) {
-                Column(
-                    modifier = Modifier
-                        .background(DarkSurfaceVariant)
-                        .padding(bottom = 8.dp),
-                    verticalArrangement = Arrangement.spacedBy(4.dp)
-                ) {
+                HorizontalDivider(
+                    color = GlassStroke,
+                    thickness = 0.5.dp,
+                    modifier = Modifier.padding(horizontal = 16.dp)
+                )
+            }
+
+            AnimatedVisibility(
+                visible = expanded,
+                enter = expandVertically(animationSpec = tween(250)) + fadeIn(animationSpec = tween(250)),
+                exit = shrinkVertically(animationSpec = tween(200)) + fadeOut(animationSpec = tween(150))
+            ) {
+                Column(modifier = Modifier.padding(vertical = 4.dp)) {
                     groupChapters.forEach { (absoluteIndex, chapter) ->
                         ChapterRow(
                             chapter = chapter,
@@ -582,88 +863,111 @@ fun ChapterRow(
     isNextToRead: Boolean,
     onClick: () -> Unit
 ) {
-    val interactionSource = remember { MutableInteractionSource() }
-    val backgroundColor = when {
-        isSelected -> BlueAccent.copy(alpha = 0.25f)
-        isRead -> Color(0xFF10B981).copy(alpha = 0.15f)
-        isNextToRead -> BlueAccent.copy(alpha = 0.1f)
-        else -> Color(0xFF1a1a1a)
-    }
-    val borderColor = when {
+    val accentColor = when {
         isSelected -> BlueAccent
-        isNextToRead -> BlueAccent.copy(alpha = 0.6f)
+        isRead -> ReadGreen
+        isNextToRead -> BlueLight
         else -> Color.Transparent
     }
-    
+
+    val bgColor = when {
+        isSelected -> CurrentBlueGlow
+        else -> Color.Transparent
+    }
+
     Box {
         Row(
             modifier = Modifier
                 .fillMaxWidth()
-                .background(backgroundColor)
-                .then(
-                    if (isSelected || isNextToRead) Modifier
-                        .border(2.dp, borderColor, RoundedCornerShape(4.dp))
-                        .padding(10.dp)
-                    else Modifier.padding(horizontal = 16.dp, vertical = 12.dp)
-                )
                 .clickable(
-                    interactionSource = interactionSource,
+                    interactionSource = remember { MutableInteractionSource() },
                     indication = null,
                     onClick = onClick
-                ),
+                )
+                .background(bgColor)
+                .padding(start = 0.dp, end = 16.dp, top = 12.dp, bottom = 12.dp),
             verticalAlignment = Alignment.CenterVertically
         ) {
-            if (isRead && !isSelected) {
-                Icon(
-                    imageVector = Icons.Default.Check,
-                    contentDescription = "Read",
-                    tint = Color(0xFF10B981),
-                    modifier = Modifier.size(16.dp)
-                )
-                Spacer(modifier = Modifier.width(8.dp))
-            } else if (isSelected) {
-                Icon(
-                    imageVector = Icons.Default.PlayArrow,
-                    contentDescription = "Reading",
-                    tint = BlueAccent,
-                    modifier = Modifier.size(16.dp)
-                )
-                Spacer(modifier = Modifier.width(8.dp))
-            } else if (isNextToRead) {
-                Icon(
-                    imageVector = Icons.Default.PlayArrow,
-                    contentDescription = "Next to Read",
-                    tint = BlueAccent,
-                    modifier = Modifier.size(16.dp)
-                )
-                Spacer(modifier = Modifier.width(8.dp))
-            }
+            Box(
+                modifier = Modifier
+                    .width(3.dp)
+                    .height(32.dp)
+                    .background(accentColor, RoundedCornerShape(2.dp))
+            )
+
+            Spacer(modifier = Modifier.width(14.dp))
+
+            val chNum = extractChapterNum(chapter.title ?: "")
             Text(
-                text = chapter.title ?: "Chapter",
+                text = "Ch. $chNum",
                 style = MaterialTheme.typography.bodyMedium,
                 color = when {
                     isSelected -> BlueAccent
+                    isRead -> ReadGreen.copy(alpha = 0.8f)
+                    else -> SilverLight
+                },
+                fontWeight = if (isSelected || isNextToRead) FontWeight.Bold else FontWeight.Medium,
+                modifier = Modifier.width(64.dp)
+            )
+
+            Spacer(modifier = Modifier.width(8.dp))
+
+            Text(
+                text = chapter.title ?: "",
+                style = MaterialTheme.typography.bodyMedium,
+                color = when {
+                    isSelected -> Color.White
                     isNextToRead -> Color.White
                     isRead -> SilverDark
-                    else -> Color.White
+                    else -> SilverLight
                 },
-                modifier = Modifier.weight(1f),
                 maxLines = 1,
-                overflow = TextOverflow.Ellipsis
+                overflow = TextOverflow.Ellipsis,
+                modifier = Modifier.weight(1f)
             )
-            if (isSelected) {
-                Text(
-                    text = "Reading",
-                    style = MaterialTheme.typography.labelSmall,
-                    color = BlueAccent
-                )
-            } else if (isNextToRead && !isRead) {
-                Text(
-                    text = "Next",
-                    style = MaterialTheme.typography.labelSmall,
-                    color = BlueAccent
-                )
+
+            Spacer(modifier = Modifier.width(8.dp))
+
+            when {
+                isSelected -> {
+                    Box(
+                        modifier = Modifier
+                            .size(8.dp)
+                            .background(BlueAccent, CircleShape)
+                    )
+                }
+                isNextToRead && !isRead -> {
+                    Box(
+                        modifier = Modifier
+                            .size(8.dp)
+                            .background(BlueLight, CircleShape)
+                    )
+                }
+                isRead -> {
+                    Box(
+                        modifier = Modifier
+                            .size(8.dp)
+                            .background(ReadGreen.copy(alpha = 0.5f), CircleShape)
+                    )
+                }
             }
+        }
+
+        if (isSelected) {
+            Box(
+                modifier = Modifier
+                    .fillMaxWidth()
+                    .height(1.dp)
+                    .background(
+                        Brush.horizontalGradient(
+                            colors = listOf(
+                                BlueAccent.copy(alpha = 0.6f),
+                                BlueAccent.copy(alpha = 0f)
+                            )
+                        )
+                    )
+                    .align(Alignment.BottomCenter)
+            )
         }
     }
 }

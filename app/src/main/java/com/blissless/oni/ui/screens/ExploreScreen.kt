@@ -1,5 +1,6 @@
 package com.blissless.oni.ui.screens
 
+import androidx.compose.foundation.BorderStroke
 import androidx.compose.foundation.background
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.Arrangement
@@ -48,9 +49,12 @@ import coil.compose.AsyncImage
 import com.blissless.oni.data.HomeSection
 import com.blissless.oni.data.MangaSearchResult
 import com.blissless.oni.ui.theme.BlueAccent
+import com.blissless.oni.ui.theme.BlueLight
 import com.blissless.oni.ui.theme.DarkBackground
+import com.blissless.oni.ui.theme.DarkCard
 import com.blissless.oni.ui.theme.DarkSurface
 import com.blissless.oni.ui.theme.DarkSurfaceVariant
+import com.blissless.oni.ui.theme.GlassStroke
 import com.blissless.oni.ui.theme.SilverDark
 import com.blissless.oni.ui.theme.SilverLight
 import com.blissless.oni.viewmodel.MainViewModel
@@ -67,8 +71,6 @@ fun ExploreScreen(
     LaunchedEffect(Unit) {
         if (sections.isEmpty()) {
             viewModel.loadHomePage()
-        } else {
-            viewModel.preloadContinueReading()
         }
     }
 
@@ -284,12 +286,14 @@ fun SectionRow(
                 text = section.title,
                 style = MaterialTheme.typography.titleMedium,
                 color = Color.White,
-                fontWeight = FontWeight.Bold
+                fontWeight = FontWeight.Bold,
+                letterSpacing = 0.3.sp
             )
             Text(
                 text = "${section.items.size} titles",
                 fontSize = 12.sp,
-                color = SilverDark
+                color = SilverDark,
+                letterSpacing = 0.2.sp
             )
         }
 
@@ -316,9 +320,10 @@ fun MangaSmallCard(
         modifier = Modifier
             .width(140.dp)
             .clickable(onClick = onClick),
-        shape = RoundedCornerShape(4.dp),
-        colors = CardDefaults.cardColors(containerColor = DarkSurface),
-        elevation = CardDefaults.cardElevation(defaultElevation = 0.dp)
+        shape = RoundedCornerShape(12.dp),
+        colors = CardDefaults.cardColors(containerColor = DarkCard),
+        elevation = CardDefaults.cardElevation(defaultElevation = 0.dp),
+        border = BorderStroke(0.5.dp, GlassStroke)
     ) {
         Column {
             Box(
@@ -343,13 +348,25 @@ fun MangaSmallCard(
                         fontWeight = FontWeight.Bold
                     )
                 }
+
+                Box(
+                    modifier = Modifier
+                        .fillMaxWidth()
+                        .height(60.dp)
+                        .background(
+                            Brush.verticalGradient(
+                                colors = listOf(Color.Transparent, DarkCard.copy(alpha = 0.85f))
+                            )
+                        )
+                        .align(Alignment.BottomCenter)
+                )
             }
             Box(
                 modifier = Modifier
                     .fillMaxWidth()
                     .heightIn(min = 36.dp)
-                    .padding(horizontal = 10.dp),
-                    contentAlignment = Alignment.Center
+                    .padding(horizontal = 10.dp, vertical = 6.dp),
+                contentAlignment = Alignment.CenterStart
             ) {
                 Text(
                     text = manga.title,
@@ -358,7 +375,8 @@ fun MangaSmallCard(
                     color = Color.White,
                     fontWeight = FontWeight.Medium,
                     maxLines = 2,
-                    overflow = TextOverflow.Ellipsis
+                    overflow = TextOverflow.Ellipsis,
+                    letterSpacing = 0.2.sp
                 )
             }
         }

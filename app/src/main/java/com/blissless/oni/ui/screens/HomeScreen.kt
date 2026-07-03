@@ -1,9 +1,8 @@
 package com.blissless.oni.ui.screens
 
+import androidx.compose.foundation.BorderStroke
 import androidx.compose.foundation.background
 import androidx.compose.foundation.clickable
-import androidx.compose.foundation.layout.Box
-import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
@@ -25,8 +24,8 @@ import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.filled.Close
 import androidx.compose.material.icons.filled.PlayArrow
 import androidx.compose.material3.Card
-import androidx.compose.material3.Icon
 import androidx.compose.material3.CardDefaults
+import androidx.compose.material3.Icon
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
@@ -36,20 +35,25 @@ import androidx.compose.runtime.getValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
+import androidx.compose.ui.graphics.Brush
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.layout.ContentScale
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
-import androidx.compose.ui.graphics.graphicsLayer
+import androidx.compose.ui.unit.sp
 import coil.compose.AsyncImage
 import com.blissless.oni.data.MangaSearchResult
 import com.blissless.oni.data.MangaTrack
 import com.blissless.oni.viewmodel.MainViewModel
 import com.blissless.oni.ui.theme.BlueAccent
+import com.blissless.oni.ui.theme.BlueLight
 import com.blissless.oni.ui.theme.DarkBackground
+import com.blissless.oni.ui.theme.DarkCard
 import com.blissless.oni.ui.theme.DarkSurface
-import com.blissless.oni.ui.theme.DarkSurfaceVariant
+import com.blissless.oni.ui.theme.GlassStroke
+import com.blissless.oni.ui.theme.GradientBlue
+import com.blissless.oni.ui.theme.GradientPurple
 import com.blissless.oni.ui.theme.SilverDark
 import com.blissless.oni.ui.theme.SilverLight
 
@@ -64,7 +68,6 @@ fun HomeScreen(
 
     LaunchedEffect(Unit) {
         viewModel.refreshTrackingLists()
-        viewModel.preloadContinueReading()
     }
 
     LazyColumn(
@@ -183,18 +186,20 @@ fun TrackingCard(
 ) {
     Card(
         modifier = Modifier
-            .width(120.dp)
+            .width(140.dp)
+            .clip(RoundedCornerShape(16.dp))
             .clickable(onClick = onClick),
-        shape = RoundedCornerShape(12.dp),
-        colors = CardDefaults.cardColors(containerColor = DarkSurfaceVariant),
-        elevation = CardDefaults.cardElevation(defaultElevation = 4.dp)
+        shape = RoundedCornerShape(16.dp),
+        colors = CardDefaults.cardColors(containerColor = DarkCard),
+        elevation = CardDefaults.cardElevation(defaultElevation = 0.dp),
+        border = BorderStroke(0.5.dp, GlassStroke)
     ) {
         Column {
             Box(
                 modifier = Modifier
                     .fillMaxWidth()
-                    .height(170.dp)
-                    .background(Color(0xFF3a3a4a)),
+                    .height(190.dp)
+                    .background(DarkSurface),
                 contentAlignment = Alignment.Center
             ) {
                 if (track.coverUrl != null) {
@@ -212,58 +217,87 @@ fun TrackingCard(
                         fontWeight = FontWeight.Bold
                     )
                 }
+
+                // Gradient overlay at bottom
+                Box(
+                    modifier = Modifier
+                        .fillMaxWidth()
+                        .height(80.dp)
+                        .background(
+                            Brush.verticalGradient(
+                                colors = listOf(
+                                    Color.Transparent,
+                                    DarkCard.copy(alpha = 0.9f)
+                                )
+                            )
+                        )
+                        .align(Alignment.BottomCenter)
+                )
+
                 if (onRemoveClick != null) {
                     Box(
                         modifier = Modifier
                             .align(Alignment.TopEnd)
-                            .padding(4.dp)
-                            .size(24.dp)
-                            .background(Color.Black.copy(alpha = 0.6f), CircleShape)
+                            .padding(6.dp)
+                            .size(26.dp)
+                            .background(Color.Black.copy(alpha = 0.7f), CircleShape)
                             .clickable(onClick = onRemoveClick),
                         contentAlignment = Alignment.Center
                     ) {
                         Icon(
                             imageVector = Icons.Default.Close,
-                            contentDescription = "Remove from Reading",
+                            contentDescription = "Remove",
                             tint = Color.White,
                             modifier = Modifier.size(14.dp)
                         )
                     }
                 }
-                Box(
-                    modifier = Modifier
-                        .size(40.dp)
-                        .background(BlueAccent.copy(alpha = 0.9f), CircleShape)
-                        .clickable(onClick = onPlayClick),
-                    contentAlignment = Alignment.Center
-                ) {
-                    Icon(
-                        imageVector = Icons.Default.PlayArrow,
-                        contentDescription = "Continue Reading",
-                        tint = Color.White,
-                        modifier = Modifier.size(28.dp)
-                    )
-                }
             }
+
             Column(
                 modifier = Modifier
                     .fillMaxWidth()
-                    .padding(horizontal = 8.dp, vertical = 4.dp)
+                    .padding(horizontal = 10.dp, vertical = 8.dp)
             ) {
                 Text(
                     text = track.title,
                     style = MaterialTheme.typography.bodySmall,
                     color = Color.White,
+                    fontWeight = FontWeight.Medium,
                     maxLines = 2,
-                    overflow = TextOverflow.Ellipsis
+                    overflow = TextOverflow.Ellipsis,
+                    letterSpacing = 0.2.sp
                 )
-                Spacer(modifier = Modifier.height(2.dp))
-                val displayTotal = if (track.totalChapters > 0) track.totalChapters.toString() else "?"
-                Text(
-                    text = "Ch. ${if (track.currentChapterNumber > 0) track.currentChapterNumber else track.currentChapterIndex + 1}/$displayTotal",
-                    style = MaterialTheme.typography.labelSmall,
-                    color = BlueAccent
-                )
+                Spacer(modifier = Modifier.height(6.dp))
+                Row(
+                    modifier = Modifier.fillMaxWidth(),
+                    horizontalArrangement = Arrangement.SpaceBetween,
+                    verticalAlignment = Alignment.CenterVertically
+                ) {
+                    val displayTotal = if (track.totalChapters > 0) track.totalChapters.toString() else "?"
+                    Text(
+                        text = "Ch. ${if (track.currentChapterNumber > 0) track.currentChapterNumber else track.currentChapterIndex + 1}/$displayTotal",
+                        style = MaterialTheme.typography.labelSmall,
+                        color = BlueLight,
+                        fontWeight = FontWeight.SemiBold,
+                        letterSpacing = 0.3.sp
+                    )
+                    Box(
+                        modifier = Modifier
+                            .size(32.dp)
+                            .clip(CircleShape)
+                            .background(BlueAccent.copy(alpha = 0.2f))
+                            .clickable(onClick = onPlayClick),
+                        contentAlignment = Alignment.Center
+                    ) {
+                        Icon(
+                            imageVector = Icons.Default.PlayArrow,
+                            contentDescription = "Continue",
+                            tint = BlueAccent,
+                            modifier = Modifier.size(18.dp)
+                        )
+                    }
+                }
             }
         }
     }

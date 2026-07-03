@@ -1,6 +1,8 @@
 package com.blissless.oni.ui.screens
 
+import androidx.compose.foundation.BorderStroke
 import androidx.compose.foundation.background
+import androidx.compose.foundation.border
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
@@ -16,6 +18,7 @@ import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.items
+import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.foundation.text.KeyboardActions
 import androidx.compose.foundation.text.KeyboardOptions
@@ -47,6 +50,9 @@ import androidx.compose.ui.focus.focusRequester
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
 import androidx.compose.ui.graphics.Color
+import androidx.compose.ui.text.TextStyle
+import androidx.compose.ui.unit.dp
+import androidx.compose.ui.unit.sp
 import androidx.compose.ui.layout.ContentScale
 import androidx.compose.ui.platform.LocalFocusManager
 import androidx.compose.ui.platform.LocalSoftwareKeyboardController
@@ -61,9 +67,12 @@ import com.blissless.oni.viewmodel.UiState
 import kotlinx.coroutines.Job
 import kotlinx.coroutines.delay
 import com.blissless.oni.ui.theme.BlueAccent
+import com.blissless.oni.ui.theme.BlueLight
 import com.blissless.oni.ui.theme.DarkBackground
+import com.blissless.oni.ui.theme.DarkCard
 import com.blissless.oni.ui.theme.DarkSurface
 import com.blissless.oni.ui.theme.DarkSurfaceVariant
+import com.blissless.oni.ui.theme.GlassStroke
 import com.blissless.oni.ui.theme.SilverDark
 import com.blissless.oni.ui.theme.SilverLight
 
@@ -110,42 +119,81 @@ fun SearchScreen(
         verticalArrangement = Arrangement.spacedBy(16.dp)
     ) {
         item {
-            OutlinedTextField(
-                value = searchQuery,
-                onValueChange = { viewModel.updateQuery(it) },
+            Box(
                 modifier = Modifier
                     .fillMaxWidth()
                     .padding(horizontal = 16.dp)
-                    .focusRequester(focusRequester),
-                placeholder = { Text("Search manga...") },
-                leadingIcon = {
-                    Icon(Icons.Default.Search, contentDescription = "Search")
-                },
-                trailingIcon = {
+                    .height(50.dp)
+                    .clip(RoundedCornerShape(14.dp))
+                    .background(DarkCard)
+                    .border(
+                        if (searchQuery.isNotEmpty()) 1.dp else 0.5.dp,
+                        if (searchQuery.isNotEmpty()) GlassStroke.copy(alpha = 0.5f) else GlassStroke,
+                        RoundedCornerShape(14.dp)
+                    )
+                    .focusRequester(focusRequester)
+            ) {
+                Row(
+                    modifier = Modifier
+                        .fillMaxSize()
+                        .padding(horizontal = 14.dp),
+                    verticalAlignment = Alignment.CenterVertically
+                ) {
+                    Icon(
+                        Icons.Default.Search,
+                        contentDescription = "Search",
+                        tint = SilverDark,
+                        modifier = Modifier.size(20.dp)
+                    )
+                    Spacer(modifier = Modifier.width(10.dp))
+                    BasicTextField(
+                        value = searchQuery,
+                        onValueChange = { viewModel.updateQuery(it) },
+                        modifier = Modifier.weight(1f),
+                        singleLine = true,
+                        textStyle = TextStyle(
+                            color = Color.White,
+                            fontSize = 15.sp
+                        ),
+                        keyboardOptions = KeyboardOptions(imeAction = ImeAction.Search),
+                        keyboardActions = KeyboardActions(
+                            onSearch = {
+                                viewModel.search()
+                                keyboardController?.hide()
+                                focusManager.clearFocus()
+                            }
+                        ),
+                        decorationBox = { innerTextField ->
+                            Box {
+                                if (searchQuery.isEmpty()) {
+                                    Text(
+                                        "Search manga...",
+                                        color = SilverDark,
+                                        fontSize = 15.sp
+                                    )
+                                }
+                                innerTextField()
+                            }
+                        }
+                    )
                     if (searchQuery.isNotEmpty()) {
-                        IconButton(onClick = {
-                            viewModel.clearSearch()
-                            keyboardController?.hide()
-                        }) {
-                            Icon(Icons.Default.Clear, contentDescription = "Clear")
+                        IconButton(
+                            onClick = {
+                                viewModel.clearSearch()
+                                keyboardController?.hide()
+                            },
+                            modifier = Modifier.size(24.dp)
+                        ) {
+                            Icon(
+                                Icons.Default.Clear,
+                                contentDescription = "Clear",
+                                tint = SilverDark,
+                                modifier = Modifier.size(18.dp)
+                            )
                         }
                     }
-                },
-                singleLine = true,
-                keyboardOptions = KeyboardOptions(imeAction = ImeAction.Search),
-                keyboardActions = KeyboardActions(
-                    onSearch = {
-                        viewModel.search()
-                        keyboardController?.hide()
-                        focusManager.clearFocus()
-                    }
-                ),
-                shape = RoundedCornerShape(12.dp),
-                colors = OutlinedTextFieldDefaults.colors(
-                    focusedBorderColor = BlueAccent,
-                    cursorColor = BlueAccent
-                )
-            )
+                }
+            }
         }
 
         when (val state = searchResults) {
@@ -225,16 +273,15 @@ fun SearchMangaCard(
             .fillMaxWidth()
             .padding(bottom = 6.dp)
             .clickable(onClick = onClick),
-        shape = RoundedCornerShape(8.dp),
-        colors = CardDefaults.cardColors(
-            containerColor = DarkSurfaceVariant
-        ),
-        elevation = CardDefaults.cardElevation(defaultElevation = 2.dp)
+        shape = RoundedCornerShape(14.dp),
+        colors = CardDefaults.cardColors(containerColor = DarkCard),
+        elevation = CardDefaults.cardElevation(defaultElevation = 0.dp),
+        border = BorderStroke(0.5.dp, GlassStroke)
     ) {
         Row(
             modifier = Modifier
                 .fillMaxWidth()
-                .padding(8.dp),
+                .padding(10.dp),
             verticalAlignment = Alignment.CenterVertically
         ) {
             if (manga.coverUrl != null) {
@@ -242,42 +289,59 @@ fun SearchMangaCard(
                     model = manga.coverUrl,
                     contentDescription = manga.title,
                     modifier = Modifier
-                        .size(50.dp, 70.dp)
-                        .clip(RoundedCornerShape(6.dp)),
+                        .size(56.dp, 78.dp)
+                        .clip(RoundedCornerShape(10.dp)),
                     contentScale = ContentScale.Crop
                 )
-                Spacer(modifier = Modifier.width(12.dp))
+                Spacer(modifier = Modifier.width(14.dp))
             } else {
                 Box(
                     modifier = Modifier
-                        .size(50.dp, 70.dp)
-                        .clip(RoundedCornerShape(6.dp))
-                        .background(Color(0xFF3a3a4a)),
+                        .size(56.dp, 78.dp)
+                        .clip(RoundedCornerShape(10.dp))
+                        .background(DarkSurfaceVariant),
                     contentAlignment = Alignment.Center
                 ) {
                     Text(
                         text = manga.title.take(2).uppercase(),
                         style = MaterialTheme.typography.titleSmall,
-                        color = Color.White
+                        color = BlueAccent.copy(alpha = 0.5f),
+                        fontWeight = FontWeight.Bold
                     )
                 }
-                Spacer(modifier = Modifier.width(12.dp))
+                Spacer(modifier = Modifier.width(14.dp))
             }
 
-            Column(modifier = Modifier.weight(1f)) {
+            Column(
+                modifier = Modifier.weight(1f),
+                verticalArrangement = Arrangement.Center
+            ) {
                 Text(
                     text = manga.title,
                     style = MaterialTheme.typography.bodyMedium,
                     maxLines = 2,
                     overflow = TextOverflow.Ellipsis,
-                    color = Color.White
+                    color = Color.White,
+                    fontWeight = FontWeight.Medium,
+                    letterSpacing = 0.2.sp
                 )
-                Spacer(modifier = Modifier.height(2.dp))
-                Text(
-                    text = "Tap to read",
-                    style = MaterialTheme.typography.labelSmall,
-                    color = BlueAccent
-                )
+                Spacer(modifier = Modifier.height(6.dp))
+                Row(verticalAlignment = Alignment.CenterVertically) {
+                    Box(
+                        modifier = Modifier
+                            .size(6.dp)
+                            .clip(CircleShape)
+                            .background(BlueAccent)
+                    )
+                    Spacer(modifier = Modifier.width(6.dp))
+                    Text(
+                        text = "Tap to read",
+                        style = MaterialTheme.typography.labelSmall,
+                        color = BlueLight,
+                        fontWeight = FontWeight.Medium,
+                        letterSpacing = 0.3.sp
+                    )
+                }
             }
         }
     }

@@ -3,6 +3,7 @@ package com.blissless.oni.ui.screens
 import android.content.Intent
 import android.net.Uri
 import androidx.compose.foundation.background
+import androidx.compose.foundation.border
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
@@ -31,6 +32,8 @@ import androidx.compose.material.icons.filled.Widgets
 import androidx.compose.material3.AlertDialog
 import androidx.compose.material3.Button
 import androidx.compose.material3.ButtonDefaults
+import androidx.compose.material3.Card
+import androidx.compose.material3.CardDefaults
 import androidx.compose.material3.CircularProgressIndicator
 import androidx.compose.material3.HorizontalDivider
 import androidx.compose.material3.Icon
@@ -57,6 +60,7 @@ import androidx.compose.ui.graphics.vector.ImageVector
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
+import androidx.compose.ui.unit.sp
 import androidx.lifecycle.viewmodel.compose.viewModel
 import com.blissless.oni.BuildConfig
 import com.blissless.oni.MainActivity
@@ -64,7 +68,9 @@ import com.blissless.oni.ui.theme.BlueAccent
 import com.blissless.oni.ui.theme.BlueDark
 import com.blissless.oni.ui.theme.BlueLight
 import com.blissless.oni.ui.theme.DarkBackground
+import com.blissless.oni.ui.theme.DarkCard
 import com.blissless.oni.ui.theme.DarkElevated
+import com.blissless.oni.ui.theme.GlassStroke
 import com.blissless.oni.ui.theme.DarkSurface
 import com.blissless.oni.ui.theme.DarkSurfaceVariant
 import com.blissless.oni.ui.theme.Silver
@@ -92,6 +98,7 @@ fun SettingsScreen(viewModel: MainViewModel) {
 
     LaunchedEffect(Unit) {
         viewModel.checkAnilistSession()
+        viewModel.discoverExtensions()
     }
 
     var showLogoutDialog by remember { mutableStateOf(false) }
@@ -111,6 +118,7 @@ fun SettingsScreen(viewModel: MainViewModel) {
             style = MaterialTheme.typography.headlineMedium,
             color = SilverLight,
             fontWeight = FontWeight.Bold,
+            letterSpacing = 0.5.sp,
             modifier = Modifier.padding(horizontal = 20.dp, vertical = 16.dp)
         )
 
@@ -143,6 +151,7 @@ fun SettingsScreen(viewModel: MainViewModel) {
                     Spacer(Modifier.width(12.dp))
                     Column(modifier = Modifier.weight(1f)) {
                         Text("Logged in as $anilistUsername", color = SilverLight, style = MaterialTheme.typography.bodyLarge)
+                        Spacer(Modifier.height(4.dp))
                         Row(verticalAlignment = Alignment.CenterVertically) {
                             Box(
                                 modifier = Modifier
@@ -180,7 +189,7 @@ fun SettingsScreen(viewModel: MainViewModel) {
                     } else {
                         OutlinedButton(
                             onClick = { viewModel.syncAnilistManga() },
-                            shape = RoundedCornerShape(8.dp)
+                            shape = RoundedCornerShape(12.dp)
                         ) {
                             Icon(Icons.Default.Sync, contentDescription = null, modifier = Modifier.size(18.dp), tint = BlueAccent)
                             Spacer(Modifier.width(6.dp))
@@ -226,18 +235,19 @@ fun SettingsScreen(viewModel: MainViewModel) {
                     color = SilverDark,
                     style = MaterialTheme.typography.bodySmall
                 )
-                Spacer(Modifier.height(4.dp))
+                Spacer(Modifier.height(8.dp))
                 Slider(
                     value = syncThreshold.toFloat(),
                     onValueChange = { viewModel.updateAnilistSyncThreshold(it.roundToInt()) },
                     valueRange = 75f..100f,
-                    steps = 24,
+                    modifier = Modifier.fillMaxWidth(),
                     colors = SliderDefaults.colors(
                         thumbColor = BlueAccent,
                         activeTrackColor = BlueAccent,
                         inactiveTrackColor = DarkSurfaceVariant,
-                        inactiveTickColor = BlueAccent
-                    )
+                        inactiveTickColor = BlueAccent.copy(alpha = 0.3f)
+                    ),
+                    steps = 24
                 )
             }
         }
@@ -280,9 +290,14 @@ fun SettingsScreen(viewModel: MainViewModel) {
             SettingsNavItem(
                 icon = Icons.Default.Widgets,
                 title = "Installed Extensions",
-                subtitle = if (extensions.isEmpty()) "Tap to discover" else {
+                subtitle = run {
                     val selected = extensions.find { it.authority == selectedExtensionAuthority }
-                    if (selected != null) selected.label else "${extensions.size} extension(s) found"
+                    when {
+                        selected != null -> selected.label
+                        selectedExtensionAuthority != null -> "Selected extension"
+                        extensions.isEmpty() -> "Tap to discover"
+                        else -> "${extensions.size} extension(s) found"
+                    }
                 },
                 tint = BlueAccent,
                 trailing = {
@@ -318,8 +333,8 @@ fun SettingsScreen(viewModel: MainViewModel) {
     if (showGitHubDialog) {
         AlertDialog(
             onDismissRequest = { showGitHubDialog = false },
-            containerColor = DarkSurface,
-            shape = RoundedCornerShape(16.dp),
+            containerColor = DarkCard,
+            shape = RoundedCornerShape(20.dp),
             title = { Text("Open GitHub", color = SilverLight, fontWeight = FontWeight.Bold) },
             text = { Text("Open the GitHub page for Oni Manga Reader?", color = SilverDark) },
             confirmButton = {
@@ -330,7 +345,7 @@ fun SettingsScreen(viewModel: MainViewModel) {
                         context.startActivity(intent)
                     },
                     colors = ButtonDefaults.buttonColors(containerColor = BlueAccent),
-                    shape = RoundedCornerShape(8.dp)
+                    shape = RoundedCornerShape(12.dp)
                 ) { Text("Open") }
             },
             dismissButton = {
@@ -344,8 +359,8 @@ fun SettingsScreen(viewModel: MainViewModel) {
     if (showMergeDialog) {
         AlertDialog(
             onDismissRequest = { },
-            containerColor = DarkSurface,
-            shape = RoundedCornerShape(16.dp),
+            containerColor = DarkCard,
+            shape = RoundedCornerShape(20.dp),
             title = { Text("Local manga found", color = SilverLight, fontWeight = FontWeight.Bold) },
             text = { Text("You have locally saved manga. How would you like to proceed?", color = SilverDark) },
             confirmButton = {
@@ -354,13 +369,13 @@ fun SettingsScreen(viewModel: MainViewModel) {
                         onClick = { viewModel.overwriteAnilistWithLocal() },
                         modifier = Modifier.fillMaxWidth(),
                         colors = ButtonDefaults.buttonColors(containerColor = BlueAccent),
-                        shape = RoundedCornerShape(8.dp)
+                        shape = RoundedCornerShape(12.dp)
                     ) { Text("Overwrite AniList with local") }
                     Button(
                         onClick = { viewModel.discardLocalAndSync() },
                         modifier = Modifier.fillMaxWidth(),
                         colors = ButtonDefaults.buttonColors(containerColor = StatusDropped),
-                        shape = RoundedCornerShape(8.dp)
+                        shape = RoundedCornerShape(12.dp)
                     ) { Text("Discard local, use AniList") }
                     TextButton(
                         onClick = { viewModel.mergeLocalAndAnilist() },
@@ -374,8 +389,8 @@ fun SettingsScreen(viewModel: MainViewModel) {
     if (showLogoutDialog) {
         AlertDialog(
             onDismissRequest = { showLogoutDialog = false },
-            containerColor = DarkSurface,
-            shape = RoundedCornerShape(16.dp),
+            containerColor = DarkCard,
+            shape = RoundedCornerShape(20.dp),
             title = { Text("Logout", color = SilverLight, fontWeight = FontWeight.Bold) },
             text = { Text("Are you sure you want to logout from AniList? Your locally synced manga will not be removed.", color = SilverDark) },
             confirmButton = {
@@ -386,7 +401,7 @@ fun SettingsScreen(viewModel: MainViewModel) {
                         showLogoutDialog = false
                     },
                     colors = ButtonDefaults.buttonColors(containerColor = StatusDropped),
-                    shape = RoundedCornerShape(8.dp)
+                    shape = RoundedCornerShape(12.dp)
                 ) { Text("Logout") }
             },
             dismissButton = {
@@ -400,8 +415,8 @@ fun SettingsScreen(viewModel: MainViewModel) {
     if (showExtensionsDialog) {
         AlertDialog(
             onDismissRequest = { showExtensionsDialog = false },
-            containerColor = DarkSurface,
-            shape = RoundedCornerShape(16.dp),
+            containerColor = DarkCard,
+            shape = RoundedCornerShape(20.dp),
             title = { Text("Installed Extensions", color = SilverLight, fontWeight = FontWeight.Bold) },
             text = {
                 Column {
@@ -531,7 +546,7 @@ private fun UpdateStatusSection(state: UpdateUiState, viewModel: UpdateViewModel
                 Button(
                     onClick = { viewModel.downloadUpdate() },
                     colors = ButtonDefaults.buttonColors(containerColor = BlueAccent),
-                    shape = RoundedCornerShape(8.dp)
+                    shape = RoundedCornerShape(12.dp)
                 ) {
                     Icon(Icons.Default.Download, contentDescription = null, modifier = Modifier.size(16.dp))
                     Spacer(Modifier.width(6.dp))
@@ -549,7 +564,7 @@ private fun UpdateStatusSection(state: UpdateUiState, viewModel: UpdateViewModel
             Button(
                 onClick = { viewModel.checkForUpdates() },
                 colors = ButtonDefaults.buttonColors(containerColor = DarkElevated),
-                shape = RoundedCornerShape(8.dp)
+                shape = RoundedCornerShape(12.dp)
             ) {
                 Text("Check for Updates", color = SilverLight)
             }
@@ -564,18 +579,20 @@ fun SettingsSectionHeader(title: String) {
         color = BlueAccent,
         style = MaterialTheme.typography.titleSmall,
         fontWeight = FontWeight.SemiBold,
+        letterSpacing = 1.sp,
         modifier = Modifier.padding(horizontal = 20.dp, vertical = 8.dp)
     )
 }
 
 @Composable
 fun SettingsCard(content: @Composable () -> Unit) {
-    Column(
+    Card(
         modifier = Modifier
             .fillMaxWidth()
-            .padding(horizontal = 16.dp)
-            .clip(RoundedCornerShape(16.dp))
-            .background(DarkSurface)
+            .padding(horizontal = 16.dp),
+        shape = RoundedCornerShape(16.dp),
+        colors = CardDefaults.cardColors(containerColor = DarkCard),
+        elevation = CardDefaults.cardElevation(defaultElevation = 0.dp)
     ) {
         content()
     }
@@ -619,6 +636,6 @@ fun SettingsNavItem(
 fun SettingsDivider() {
     HorizontalDivider(
         modifier = Modifier.padding(horizontal = 16.dp),
-        color = SilverLight.copy(alpha = 0.06f)
+        color = GlassStroke
     )
 }

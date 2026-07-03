@@ -1,7 +1,9 @@
 package com.blissless.oni.ui.screens
 
 import androidx.activity.compose.BackHandler
+import androidx.compose.foundation.BorderStroke
 import androidx.compose.foundation.background
+import androidx.compose.foundation.border
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
@@ -20,6 +22,7 @@ import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.layout.statusBars
 import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.layout.WindowInsets
+import androidx.compose.foundation.layout.widthIn
 import androidx.compose.foundation.layout.windowInsetsPadding
 import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.shape.CircleShape
@@ -42,6 +45,8 @@ import androidx.compose.material.icons.filled.Star
 import androidx.compose.material3.AlertDialog
 import androidx.compose.material3.Button
 import androidx.compose.material3.ButtonDefaults
+import androidx.compose.material3.Card
+import androidx.compose.material3.CardDefaults
 import androidx.compose.material3.CircularProgressIndicator
 import androidx.compose.material3.DropdownMenu
 import androidx.compose.material3.DropdownMenuItem
@@ -81,11 +86,21 @@ import androidx.compose.ui.unit.sp
 import coil.compose.AsyncImage
 import com.blissless.oni.data.ReadingStatus
 import com.blissless.oni.ui.theme.BlueAccent
+import com.blissless.oni.ui.theme.BlueLight
 import com.blissless.oni.ui.theme.DarkBackground
+import com.blissless.oni.ui.theme.DarkCard
 import com.blissless.oni.ui.theme.DarkSurface
 import com.blissless.oni.ui.theme.DarkSurfaceVariant
+import com.blissless.oni.ui.theme.GlassStroke
+import com.blissless.oni.ui.theme.GradientBlue
+import com.blissless.oni.ui.theme.GradientPurple
+import com.blissless.oni.ui.theme.ReadGreen
 import com.blissless.oni.ui.theme.SilverDark
 import com.blissless.oni.ui.theme.SilverLight
+import com.blissless.oni.ui.theme.StatusCompleted
+import com.blissless.oni.ui.theme.StatusDropped
+import com.blissless.oni.ui.theme.StatusPaused
+import com.blissless.oni.ui.theme.StatusPlanning
 import com.blissless.oni.viewmodel.MainViewModel
 import kotlin.math.roundToInt
 
@@ -102,6 +117,7 @@ fun MangaDetailScreen(
     val mangaDetail by viewModel.mangaDetail.collectAsState()
     val isLoading by viewModel.isLoading.collectAsState()
     val chapters by viewModel.chapters.collectAsState()
+    val readChapterIndices by viewModel.readChapterIndices.collectAsState()
     val detail = mangaDetail
 
     var currentStatus by remember(detail?.id) { mutableStateOf<ReadingStatus?>(null) }
@@ -264,88 +280,118 @@ fun MangaDetailScreen(
                         }
                     }
 
-                    Spacer(modifier = Modifier.height(16.dp))
+                    Spacer(modifier = Modifier.height(20.dp))
 
-                    Column(
+                    Card(
                         modifier = Modifier
                             .fillMaxWidth()
+                            .padding(horizontal = 16.dp),
+                        shape = RoundedCornerShape(16.dp),
+                        colors = CardDefaults.cardColors(containerColor = DarkCard),
+                        elevation = CardDefaults.cardElevation(defaultElevation = 0.dp),
+                        border = BorderStroke(0.5.dp, GlassStroke)
                     ) {
                         Row(
                             modifier = Modifier
                                 .fillMaxWidth()
-                                .padding(horizontal = 16.dp, vertical = 4.dp),
-                        horizontalArrangement = Arrangement.SpaceBetween,
-                        verticalAlignment = Alignment.CenterVertically
-                    ) {
-                        if (detail.avgRating > 0) {
-                            Row(verticalAlignment = Alignment.CenterVertically) {
-                                Icon(Icons.Default.Star, contentDescription = null, tint = Color(0xFFfbbf24), modifier = Modifier.size(16.dp))
-                                Spacer(Modifier.width(4.dp))
-                                Text(
-                                    text = String.format("%.1f", detail.avgRating),
-                                    color = Color(0xFFfbbf24),
-                                    fontWeight = FontWeight.Bold,
-                                    fontSize = 14.sp
-                                )
+                                .padding(horizontal = 20.dp, vertical = 14.dp),
+                            horizontalArrangement = Arrangement.SpaceEvenly,
+                            verticalAlignment = Alignment.CenterVertically
+                        ) {
+                            if (detail.avgRating > 0) {
+                                Column(horizontalAlignment = Alignment.CenterHorizontally) {
+                                    Row(verticalAlignment = Alignment.CenterVertically) {
+                                        Icon(Icons.Default.Star, contentDescription = null, tint = Color(0xFFfbbf24), modifier = Modifier.size(16.dp))
+                                        Spacer(Modifier.width(4.dp))
+                                        Text(
+                                            text = String.format("%.1f", detail.avgRating),
+                                            color = Color(0xFFfbbf24),
+                                            fontWeight = FontWeight.Bold,
+                                            fontSize = 15.sp
+                                        )
+                                    }
+                                    Spacer(Modifier.height(2.dp))
+                                    Text("Rating", color = SilverDark, fontSize = 10.sp, letterSpacing = 0.5.sp, fontWeight = FontWeight.Medium)
+                                }
+                                Box(modifier = Modifier.width(1.dp).height(32.dp).background(GlassStroke))
                             }
-                        } else {
-                            Spacer(Modifier.width(1.dp))
-                        }
-                        Row(verticalAlignment = Alignment.CenterVertically) {
-                            Icon(Icons.Default.Book, contentDescription = null, tint = SilverDark, modifier = Modifier.size(14.dp))
-                            Spacer(Modifier.width(4.dp))
-                            Text(
-                                text = "${detail.totalChapterCount} chapters",
-                                color = SilverDark,
-                                fontSize = 13.sp
-                            )
-                        }
-                        if (detail.authors.isNotEmpty()) {
-                            Row(verticalAlignment = Alignment.CenterVertically) {
-                                Icon(Icons.Default.People, contentDescription = null, tint = SilverDark, modifier = Modifier.size(14.dp))
-                                Spacer(Modifier.width(4.dp))
+
+                            Column(horizontalAlignment = Alignment.CenterHorizontally) {
                                 Text(
-                                    text = detail.authors.first(),
-                                    color = SilverDark,
-                                    fontSize = 13.sp,
-                                    maxLines = 1,
-                                    overflow = TextOverflow.Ellipsis,
-                                    modifier = Modifier.weight(1f, fill = false)
+                                    text = "${detail.totalChapterCount}",
+                                    color = SilverLight,
+                                    fontWeight = FontWeight.Bold,
+                                    fontSize = 15.sp
                                 )
+                                Spacer(Modifier.height(2.dp))
+                                Text("Chapters", color = SilverDark, fontSize = 10.sp, letterSpacing = 0.5.sp, fontWeight = FontWeight.Medium)
+                            }
+
+                            if (detail.authors.isNotEmpty()) {
+                                Box(modifier = Modifier.width(1.dp).height(32.dp).background(GlassStroke))
+                                Column(horizontalAlignment = Alignment.CenterHorizontally) {
+                                    Text(
+                                        text = detail.authors.first(),
+                                        color = SilverLight,
+                                        fontWeight = FontWeight.Medium,
+                                        fontSize = 13.sp,
+                                        maxLines = 1,
+                                        overflow = TextOverflow.Ellipsis,
+                                        modifier = Modifier.widthIn(max = 100.dp)
+                                    )
+                                    Spacer(Modifier.height(2.dp))
+                                    Text("Author", color = SilverDark, fontSize = 10.sp, letterSpacing = 0.5.sp, fontWeight = FontWeight.Medium)
+                                }
                             }
                         }
                     }
 
-                    Spacer(modifier = Modifier.height(16.dp))
+                    Spacer(modifier = Modifier.height(20.dp))
 
-                    Column(modifier = Modifier.padding(horizontal = 16.dp)) {
-                        Row(
-                            modifier = Modifier.fillMaxWidth(),
-                            horizontalArrangement = Arrangement.spacedBy(10.dp)
-                        ) {
+                    Card(
+                        modifier = Modifier
+                            .fillMaxWidth()
+                            .padding(horizontal = 16.dp),
+                        shape = RoundedCornerShape(16.dp),
+                        colors = CardDefaults.cardColors(containerColor = DarkCard),
+                        elevation = CardDefaults.cardElevation(defaultElevation = 0.dp),
+                        border = BorderStroke(0.5.dp, GlassStroke)
+                    ) {
+                        Column(modifier = Modifier.padding(16.dp)) {
                             Button(
                                 onClick = {
                                     viewModel.continueFromCurrentManga { onOpenReaderDirect() }
                                 },
-                                modifier = Modifier.weight(1f),
+                                modifier = Modifier.fillMaxWidth().height(52.dp),
                                 colors = ButtonDefaults.buttonColors(containerColor = BlueAccent),
-                                shape = RoundedCornerShape(14.dp)
+                                shape = RoundedCornerShape(14.dp),
+                                elevation = ButtonDefaults.buttonElevation(defaultElevation = 6.dp)
                             ) {
                                 Icon(Icons.Default.PlayArrow, contentDescription = null, modifier = Modifier.size(20.dp))
                                 Spacer(Modifier.width(8.dp))
                                 Text(
                                     text = if (currentStatus == ReadingStatus.READING) "Ch. $currentChapter" else "Start Reading",
                                     fontWeight = FontWeight.Bold,
-                                    fontSize = 14.sp
+                                    fontSize = 14.sp,
+                                    letterSpacing = 0.3.sp
                                 )
                             }
 
-                            Box {
-                                OutlinedButton(
-                                    onClick = { showStatusMenu = true },
-                                    modifier = Modifier.width(130.dp),
-                                    shape = RoundedCornerShape(14.dp),
-                                    border = ButtonDefaults.outlinedButtonBorder(enabled = currentStatus != null)
+                            Spacer(modifier = Modifier.height(10.dp))
+
+                            Row(
+                                modifier = Modifier.fillMaxWidth(),
+                                horizontalArrangement = Arrangement.spacedBy(10.dp)
+                            ) {
+                                Row(
+                                    modifier = Modifier
+                                        .weight(1f)
+                                        .height(44.dp)
+                                        .clip(RoundedCornerShape(12.dp))
+                                        .background(DarkSurfaceVariant.copy(alpha = 0.5f))
+                                        .clickable { showStatusMenu = true },
+                                    horizontalArrangement = Arrangement.Center,
+                                    verticalAlignment = Alignment.CenterVertically
                                 ) {
                                     Icon(
                                         when (currentStatus) {
@@ -354,7 +400,13 @@ fun MangaDetailScreen(
                                             else -> Icons.Default.BookmarkBorder
                                         },
                                         contentDescription = null,
-                                        modifier = Modifier.size(18.dp)
+                                        modifier = Modifier.size(18.dp),
+                                        tint = when (currentStatus) {
+                                            ReadingStatus.READING -> BlueAccent
+                                            ReadingStatus.PLANNING -> StatusPlanning
+                                            ReadingStatus.COMPLETED -> StatusCompleted
+                                            else -> SilverDark
+                                        }
                                     )
                                     Spacer(Modifier.width(6.dp))
                                     Text(
@@ -368,7 +420,12 @@ fun MangaDetailScreen(
                                         },
                                         fontWeight = FontWeight.Medium,
                                         fontSize = 13.sp,
-                                        maxLines = 1
+                                        color = when (currentStatus) {
+                                            ReadingStatus.READING -> BlueAccent
+                                            ReadingStatus.PLANNING -> StatusPlanning
+                                            ReadingStatus.COMPLETED -> StatusCompleted
+                                            else -> SilverLight
+                                        }
                                     )
                                 }
                                 DropdownMenu(
@@ -390,18 +447,24 @@ fun MangaDetailScreen(
                                             ReadingStatus.ON_HOLD -> "On Hold"
                                             ReadingStatus.DROPPED -> "Dropped"
                                         }
+                                        val statusColor = when (status) {
+                                            ReadingStatus.READING -> BlueAccent
+                                            ReadingStatus.PLANNING -> StatusPlanning
+                                            ReadingStatus.COMPLETED -> StatusCompleted
+                                            ReadingStatus.ON_HOLD -> StatusPaused
+                                            ReadingStatus.DROPPED -> StatusDropped
+                                        }
                                         DropdownMenuItem(
                                             text = {
                                                 Row(verticalAlignment = Alignment.CenterVertically) {
-                                                    if (currentStatus == status) {
-                                                        Icon(Icons.Default.Check, contentDescription = null,
-                                                            modifier = Modifier.size(18.dp),
-                                                            tint = BlueAccent)
-                                                        Spacer(Modifier.width(8.dp))
-                                                    } else {
-                                                        Spacer(Modifier.width(26.dp))
-                                                    }
-                                                    Text(label, fontSize = 14.sp)
+                                                    Box(
+                                                        modifier = Modifier
+                                                            .size(8.dp)
+                                                            .clip(CircleShape)
+                                                            .background(statusColor)
+                                                    )
+                                                    Spacer(Modifier.width(10.dp))
+                                                    Text(label, fontSize = 14.sp, color = SilverLight)
                                                 }
                                             },
                                             onClick = {
@@ -414,97 +477,138 @@ fun MangaDetailScreen(
                                         )
                                     }
                                 }
-                            }
-                        }
 
-                        Spacer(modifier = Modifier.height(10.dp))
-
-                        Row(
-                            modifier = Modifier.fillMaxWidth(),
-                            horizontalArrangement = Arrangement.spacedBy(10.dp)
-                        ) {
-                            OutlinedButton(
-                                onClick = {
-                                    showChapterSelect = !showChapterSelect
-                                    if (showChapterSelect) {
-                                        viewModel.showChapterListOnly()
-                                        onOpenReader()
-                                    }
-                                },
-                                modifier = Modifier.weight(1f),
-                                shape = RoundedCornerShape(14.dp)
-                            ) {
-                                Icon(Icons.AutoMirrored.Filled.List, contentDescription = null, modifier = Modifier.size(18.dp))
-                                Spacer(Modifier.width(6.dp))
-                                Text("All Chapters", fontWeight = FontWeight.Medium, fontSize = 13.sp)
+                                Row(
+                                    modifier = Modifier
+                                        .weight(1f)
+                                        .height(44.dp)
+                                        .clip(RoundedCornerShape(12.dp))
+                                        .background(DarkSurfaceVariant.copy(alpha = 0.5f))
+                                        .clickable { showChapterDialog = true },
+                                    horizontalArrangement = Arrangement.Center,
+                                    verticalAlignment = Alignment.CenterVertically
+                                ) {
+                                    Icon(Icons.Default.Edit, contentDescription = null, modifier = Modifier.size(18.dp), tint = BlueLight)
+                                    Spacer(Modifier.width(6.dp))
+                                    Text("Set Progress", fontWeight = FontWeight.Medium, fontSize = 13.sp, color = SilverLight)
+                                }
                             }
 
-                            OutlinedButton(
-                                onClick = { showChapterDialog = true },
-                                modifier = Modifier.weight(1f),
-                                shape = RoundedCornerShape(14.dp)
+                            Spacer(modifier = Modifier.height(10.dp))
+
+                            Row(
+                                modifier = Modifier
+                                    .fillMaxWidth()
+                                    .height(44.dp)
+                                    .clip(RoundedCornerShape(12.dp))
+                                    .background(DarkSurfaceVariant.copy(alpha = 0.5f))
+                                    .clickable {
+                                        showChapterSelect = !showChapterSelect
+                                        if (showChapterSelect) {
+                                            viewModel.showChapterListOnly()
+                                            onOpenReader()
+                                        }
+                                    },
+                                horizontalArrangement = Arrangement.Center,
+                                verticalAlignment = Alignment.CenterVertically
                             ) {
-                                Icon(Icons.Default.Edit, contentDescription = null, modifier = Modifier.size(18.dp))
+                                Icon(Icons.AutoMirrored.Filled.List, contentDescription = null, modifier = Modifier.size(18.dp), tint = BlueAccent)
                                 Spacer(Modifier.width(6.dp))
-                                Text("Set Progress", fontWeight = FontWeight.Medium, fontSize = 13.sp)
+                                Text("All Chapters", fontWeight = FontWeight.Medium, fontSize = 13.sp, color = SilverLight, letterSpacing = 0.3.sp)
                             }
                         }
                     }
 
                     if (chapters.isNotEmpty()) {
-                        Spacer(modifier = Modifier.height(20.dp))
-                        Column(modifier = Modifier.padding(horizontal = 16.dp)) {
-                            Row(
-                                modifier = Modifier.fillMaxWidth(),
-                                horizontalArrangement = Arrangement.SpaceBetween,
-                                verticalAlignment = Alignment.CenterVertically
-                            ) {
-                                Text(
-                                    "Quick Jump",
-                                    color = Color.White,
-                                    fontWeight = FontWeight.SemiBold,
-                                    fontSize = 15.sp
-                                )
-                                Text(
-                                    "Chapter $currentChapter of ${chapters.size}",
-                                    color = SilverDark,
-                                    fontSize = 12.sp
-                                )
-                            }
-                            Spacer(modifier = Modifier.height(10.dp))
-                            val totalCh = chapters.size
-                            val maxVisible = minOf(totalCh, 7)
-                            val startIdx = (currentChapter - 3).coerceAtLeast(0)
-                            val endIdx = (startIdx + maxVisible).coerceAtMost(totalCh)
-                            val visibleChapters = chapters.subList(startIdx, endIdx)
+                        Spacer(modifier = Modifier.height(24.dp))
+                        Card(
+                            modifier = Modifier
+                                .fillMaxWidth()
+                                .padding(horizontal = 16.dp),
+                            shape = RoundedCornerShape(16.dp),
+                            colors = CardDefaults.cardColors(containerColor = DarkCard),
+                            elevation = CardDefaults.cardElevation(defaultElevation = 0.dp),
+                            border = BorderStroke(0.5.dp, GlassStroke)
+                        ) {
+                            Column(modifier = Modifier.padding(16.dp)) {
+                                Row(
+                                    modifier = Modifier.fillMaxWidth(),
+                                    horizontalArrangement = Arrangement.SpaceBetween,
+                                    verticalAlignment = Alignment.CenterVertically
+                                ) {
+                                    Text(
+                                        "Quick Jump",
+                                        color = Color.White,
+                                        fontWeight = FontWeight.Bold,
+                                        fontSize = 15.sp,
+                                        letterSpacing = 0.3.sp
+                                    )
+                                    Text(
+                                        "Ch. $currentChapter of ${chapters.size}",
+                                        color = SilverDark,
+                                        fontSize = 12.sp,
+                                        letterSpacing = 0.2.sp
+                                    )
+                                }
+                                Spacer(modifier = Modifier.height(14.dp))
+                                val totalCh = chapters.size
+                                val maxVisible = minOf(totalCh, 7)
+                                val startIdx = (currentChapter - 3).coerceAtLeast(0)
+                                val endIdx = (startIdx + maxVisible).coerceAtMost(totalCh)
+                                val visibleChapters = chapters.subList(startIdx, endIdx)
 
-                            Row(
-                                modifier = Modifier.fillMaxWidth(),
-                                horizontalArrangement = Arrangement.spacedBy(8.dp)
-                            ) {
-                                visibleChapters.forEachIndexed { idx, ch ->
-                                    val chNum = startIdx + idx + 1
-                                    val isCurrent = chNum == currentChapter
-                                    Box(
-                                        modifier = Modifier
-                                            .size(42.dp)
-                                            .clip(CircleShape)
-                                            .background(
-                                                if (isCurrent) BlueAccent
-                                                else DarkSurfaceVariant
-                                            )
-                                            .clickable {
+                                Row(
+                                    modifier = Modifier.fillMaxWidth(),
+                                    horizontalArrangement = Arrangement.SpaceEvenly
+                                ) {
+                                    visibleChapters.forEachIndexed { idx, ch ->
+                                        val chNum = startIdx + idx + 1
+                                        val isCurrent = chNum == currentChapter
+                                        val isRead = (startIdx + idx) in readChapterIndices
+                                        Column(
+                                            horizontalAlignment = Alignment.CenterHorizontally,
+                                            modifier = Modifier.clickable {
                                                 viewModel.selectChapter(startIdx + idx)
                                                 onOpenReaderDirect()
-                                            },
-                                        contentAlignment = Alignment.Center
-                                    ) {
-                                        Text(
-                                            text = "$chNum",
-                                            color = if (isCurrent) Color.White else SilverLight.copy(alpha = 0.7f),
-                                            fontSize = 13.sp,
-                                            fontWeight = if (isCurrent) FontWeight.Bold else FontWeight.Medium
-                                        )
+                                            }
+                                        ) {
+                                            Box(
+                                                modifier = Modifier
+                                                    .size(44.dp)
+                                                    .clip(CircleShape)
+                                                    .background(
+                                                        when {
+                                                            isCurrent -> BlueAccent
+                                                            isRead -> ReadGreen.copy(alpha = 0.2f)
+                                                            else -> DarkSurfaceVariant.copy(alpha = 0.5f)
+                                                        }
+                                                    )
+                                                    .then(
+                                                        if (isCurrent) Modifier.border(2.dp, BlueLight.copy(alpha = 0.5f), CircleShape)
+                                                        else Modifier
+                                                    ),
+                                                contentAlignment = Alignment.Center
+                                            ) {
+                                                Text(
+                                                    text = "$chNum",
+                                                    color = when {
+                                                        isCurrent -> Color.White
+                                                        isRead -> ReadGreen
+                                                        else -> SilverDark
+                                                    },
+                                                    fontSize = 14.sp,
+                                                    fontWeight = if (isCurrent) FontWeight.Bold else FontWeight.Medium
+                                                )
+                                            }
+                                            Spacer(modifier = Modifier.height(4.dp))
+                                            Text(
+                                                text = if (isCurrent) "Now" else if (isRead) "Read" else "",
+                                                color = if (isCurrent) BlueLight else ReadGreen.copy(alpha = 0.7f),
+                                                fontSize = 10.sp,
+                                                fontWeight = FontWeight.Medium,
+                                                letterSpacing = 0.5.sp
+                                            )
+                                        }
                                     }
                                 }
                             }
@@ -512,61 +616,55 @@ fun MangaDetailScreen(
                     }
 
                     if (detail.genres.isNotEmpty()) {
-                        Spacer(modifier = Modifier.height(20.dp))
-                        HorizontalDivider(
-                            color = DarkSurfaceVariant,
-                            modifier = Modifier.padding(horizontal = 16.dp)
-                        )
+                        Spacer(modifier = Modifier.height(24.dp))
+                        HorizontalDivider(color = GlassStroke, modifier = Modifier.padding(horizontal = 16.dp))
                         Spacer(modifier = Modifier.height(16.dp))
                         Column(modifier = Modifier.padding(horizontal = 16.dp)) {
                             Text(
                                 "Genres",
                                 color = Color.White,
-                                fontWeight = FontWeight.SemiBold,
-                                fontSize = 15.sp
+                                fontWeight = FontWeight.Bold,
+                                fontSize = 14.sp,
+                                letterSpacing = 0.8.sp
                             )
-                            Spacer(modifier = Modifier.height(10.dp))
+                            Spacer(modifier = Modifier.height(12.dp))
                             FlowRow(
                                 horizontalArrangement = Arrangement.spacedBy(8.dp),
                                 verticalArrangement = Arrangement.spacedBy(6.dp)
                             ) {
                                 detail.genres.forEach { genre ->
-                                    SuggestionChip(
-                                        onClick = { },
-                                        label = {
-                                            Text(
-                                                genre,
-                                                fontSize = 12.sp,
-                                                fontWeight = FontWeight.Medium
-                                            )
-                                        },
-                                        colors = SuggestionChipDefaults.suggestionChipColors(
-                                            containerColor = BlueAccent.copy(alpha = 0.1f),
-                                            labelColor = BlueAccent.copy(alpha = 0.9f)
-                                        ),
-                                        shape = RoundedCornerShape(8.dp),
-                                        border = null
-                                    )
+                                    Box(
+                                        modifier = Modifier
+                                            .clip(RoundedCornerShape(20.dp))
+                                            .background(DarkSurfaceVariant.copy(alpha = 0.5f))
+                                            .border(0.5.dp, GlassStroke, RoundedCornerShape(20.dp))
+                                            .padding(horizontal = 14.dp, vertical = 6.dp)
+                                    ) {
+                                        Text(
+                                            genre,
+                                            fontSize = 12.sp,
+                                            fontWeight = FontWeight.Medium,
+                                            color = SilverLight.copy(alpha = 0.8f)
+                                        )
+                                    }
                                 }
                             }
                         }
                     }
 
                     if (detail.otherNames.isNotEmpty()) {
-                        Spacer(modifier = Modifier.height(20.dp))
-                        HorizontalDivider(
-                            color = DarkSurfaceVariant,
-                            modifier = Modifier.padding(horizontal = 16.dp)
-                        )
+                        Spacer(modifier = Modifier.height(24.dp))
+                        HorizontalDivider(color = GlassStroke, modifier = Modifier.padding(horizontal = 16.dp))
                         Spacer(modifier = Modifier.height(16.dp))
                         Column(modifier = Modifier.padding(horizontal = 16.dp)) {
                             Text(
                                 "Also Known As",
                                 color = Color.White,
-                                fontWeight = FontWeight.SemiBold,
-                                fontSize = 15.sp
+                                fontWeight = FontWeight.Bold,
+                                fontSize = 14.sp,
+                                letterSpacing = 0.8.sp
                             )
-                            Spacer(modifier = Modifier.height(8.dp))
+                            Spacer(modifier = Modifier.height(10.dp))
                             Text(
                                 text = detail.otherNames.joinToString("  ·  "),
                                 color = SilverDark,
@@ -577,18 +675,16 @@ fun MangaDetailScreen(
                     }
 
                     if (detail.synopsis.isNotEmpty()) {
-                        Spacer(modifier = Modifier.height(20.dp))
-                        HorizontalDivider(
-                            color = DarkSurfaceVariant,
-                            modifier = Modifier.padding(horizontal = 16.dp)
-                        )
+                        Spacer(modifier = Modifier.height(24.dp))
+                        HorizontalDivider(color = GlassStroke, modifier = Modifier.padding(horizontal = 16.dp))
                         Spacer(modifier = Modifier.height(16.dp))
                         Column(modifier = Modifier.padding(horizontal = 16.dp)) {
                             Text(
                                 "Synopsis",
                                 color = Color.White,
-                                fontWeight = FontWeight.SemiBold,
-                                fontSize = 15.sp
+                                fontWeight = FontWeight.Bold,
+                                fontSize = 14.sp,
+                                letterSpacing = 0.8.sp
                             )
                             Spacer(modifier = Modifier.height(10.dp))
                             Text(
@@ -601,7 +697,6 @@ fun MangaDetailScreen(
                     }
 
                     Spacer(modifier = Modifier.height(80.dp))
-                    }
                 }
             }
 
