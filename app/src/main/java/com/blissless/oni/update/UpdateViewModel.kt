@@ -1,8 +1,13 @@
 package com.blissless.oni.update
 
 import android.app.Application
+import android.app.NotificationChannel
+import android.app.NotificationManager
+import android.content.Context
 import android.content.Intent
+import android.os.Build
 import android.widget.Toast
+import androidx.core.app.NotificationCompat
 import androidx.core.content.FileProvider
 import androidx.lifecycle.AndroidViewModel
 import androidx.lifecycle.viewModelScope
@@ -15,12 +20,12 @@ import kotlinx.coroutines.withContext
 import com.google.gson.Gson
 import okhttp3.OkHttpClient
 import okhttp3.Request
-import android.os.Build
 import java.io.File
 
 data class UpdateUiState(
     val isChecking: Boolean = false,
     val isDownloading: Boolean = false,
+    val downloadProgress: Float = 0f,
     val release: GitHubRelease? = null,
     val error: String? = null,
     val downloadedFile: File? = null
@@ -40,6 +45,22 @@ class UpdateViewModel(application: Application) : AndroidViewModel(application) 
 
     private val owner = "Suntrax"
     private val repo = "oni"
+
+    private val notificationManager by lazy {
+        getApplication<Application>().getSystemService(Context.NOTIFICATION_SERVICE) as NotificationManager
+    }
+    private val notificationId = 1001
+
+    init {
+        val channel = NotificationChannel(
+            "update_downloads",
+            "Update Downloads",
+            NotificationManager.IMPORTANCE_LOW
+        ).apply { description = "Update download progress" }
+        try {
+            notificationManager.createNotificationChannel(channel)
+        } catch (_: Exception) { }
+    }
 
     fun checkForUpdates(showToast: Boolean = true) {
         viewModelScope.launch {
@@ -77,6 +98,19 @@ class UpdateViewModel(application: Application) : AndroidViewModel(application) 
         downloadUpdate()
     }
 
+    private suspend fun fetchLatestRelease(): GitHubRelease = withContext(Dispatchers.IO) {
+        val url = "https://api.github.com/repos/$owner/$repo/releases/latest"
+        val request = Request.Builder().url(url)
+            .header("Accept", "application/vnd.github.v3+json")
+            .build()
+        val response = httpClient.newCall(request).execute()
+        if (!response.isSuccessful) {
+            throw Exception("GitHub API returned ${response.code}")
+        }
+        val body = response.body!!.string()
+        gson.fromJson(body, GitHubRelease::class.java)
+    }
+
     fun downloadUpdate() {
         val release = _uiState.value.release ?: return
         val targetAbi = getDeviceAbi()
@@ -91,28 +125,18 @@ class UpdateViewModel(application: Application) : AndroidViewModel(application) 
             _uiState.value = _uiState.value.copy(isDownloading = true, error = null)
             try {
                 val file = downloadApk(asset.downloadUrl, "oni-update")
+                dismissDownloadNotification()
                 val installed = installApk(file)
                 _uiState.value = _uiState.value.copy(
                     isDownloading = false,
+                    downloadProgress = 0f,
                     downloadedFile = if (installed) file else null
                 )
             } catch (e: Exception) {
-                _uiState.value = _uiState.value.copy(isDownloading = false, error = e.message ?: "Download failed")
+                dismissDownloadNotification()
+                _uiState.value = _uiState.value.copy(isDownloading = false, downloadProgress = 0f, error = e.message ?: "Download failed")
             }
         }
-    }
-
-    private suspend fun fetchLatestRelease(): GitHubRelease = withContext(Dispatchers.IO) {
-        val url = "https://api.github.com/repos/$owner/$repo/releases/latest"
-        val request = Request.Builder().url(url)
-            .header("Accept", "application/vnd.github.v3+json")
-            .build()
-        val response = httpClient.newCall(request).execute()
-        if (!response.isSuccessful) {
-            throw Exception("GitHub API returned ${response.code}")
-        }
-        val body = response.body!!.string()
-        gson.fromJson(body, GitHubRelease::class.java)
     }
 
     private suspend fun downloadApk(url: String, fileName: String): File = withContext(Dispatchers.IO) {
@@ -127,10 +151,43 @@ class UpdateViewModel(application: Application) : AndroidViewModel(application) 
         if (!response.isSuccessful) {
             throw Exception("Server returned ${response.code}")
         }
+        val contentLength = response.body!!.contentLength()
         apkFile.outputStream().use { output ->
-            response.body!!.byteStream().use { input -> input.copyTo(output) }
+            val buffer = ByteArray(8192)
+            var bytesRead: Long = 0
+            response.body!!.byteStream().use { input ->
+                var read: Int
+                while (input.read(buffer).also { read = it } != -1) {
+                    output.write(buffer, 0, read)
+                    bytesRead += read
+                    val progress = if (contentLength > 0) (bytesRead.toFloat() / contentLength) else 0f
+                    _uiState.value = _uiState.value.copy(downloadProgress = progress)
+                    showDownloadNotification((progress * 100).toInt())
+                }
+            }
         }
         apkFile
+    }
+
+    private fun showDownloadNotification(progress: Int) {
+        val ctx = getApplication<Application>()
+        val notification = NotificationCompat.Builder(ctx, "update_downloads")
+            .setSmallIcon(android.R.drawable.stat_sys_download)
+            .setContentTitle("Downloading update")
+            .setContentText("$progress%")
+            .setProgress(100, progress, false)
+            .setOngoing(true)
+            .setSilent(true)
+            .build()
+        try {
+            notificationManager.notify(notificationId, notification)
+        } catch (_: Exception) { }
+    }
+
+    private fun dismissDownloadNotification() {
+        try {
+            notificationManager.cancel(notificationId)
+        } catch (_: Exception) { }
     }
 
     private fun installApk(file: File): Boolean {
