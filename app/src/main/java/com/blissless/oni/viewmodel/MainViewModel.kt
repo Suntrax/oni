@@ -5,7 +5,6 @@ import android.content.Intent
 import android.content.pm.PackageManager
 import android.net.Uri
 import android.util.Log
-import android.widget.Toast
 import androidx.lifecycle.ViewModel
 import androidx.lifecycle.ViewModelProvider
 import androidx.lifecycle.viewModelScope
@@ -30,7 +29,6 @@ import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.asStateFlow
 import kotlinx.coroutines.launch
 import kotlinx.coroutines.withContext
-import com.google.gson.Gson
 import okhttp3.OkHttpClient
 import okhttp3.Request
 import org.json.JSONObject
@@ -173,8 +171,8 @@ class MainViewModel(private val context: Context) : ViewModel() {
                 }
                 if (!response.isSuccessful) return@launch
                 val body = withContext(Dispatchers.IO) { response.body!!.string() }
-                val gson = Gson()
-                val release = gson.fromJson(body, GitHubRelease::class.java)
+                val json = kotlinx.serialization.json.Json { ignoreUnknownKeys = true }
+                val release = json.decodeFromString<GitHubRelease>(body)
                 val currentVersion = context.packageManager.getPackageInfo(context.packageName, 0).versionName ?: ""
                 val cleanTag = release.tagName.removePrefix("v").removePrefix("V")
                 val parts1 = cleanTag.split(".").map { it.toIntOrNull() ?: 0 }
@@ -188,9 +186,6 @@ class MainViewModel(private val context: Context) : ViewModel() {
                 }
                 if (cmp > 0) {
                     _pendingUpdateRelease.value = release
-                    withContext(Dispatchers.Main) {
-                        Toast.makeText(context, "Update available: ${release.tagName}", Toast.LENGTH_LONG).show()
-                    }
                 }
             } catch (_: Exception) { }
         }

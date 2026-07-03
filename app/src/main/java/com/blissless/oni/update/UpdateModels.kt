@@ -1,16 +1,19 @@
 package com.blissless.oni.update
 
-import com.google.gson.annotations.SerializedName
+import kotlinx.serialization.SerialName
+import kotlinx.serialization.Serializable
 
+@Serializable
 data class GitHubRelease(
-    @SerializedName("tag_name") val tagName: String = "",
+    @SerialName("tag_name") val tagName: String = "",
     val name: String = "",
     val body: String = "",
     val assets: List<ReleaseAsset> = emptyList()
 )
 
+@Serializable
 data class ReleaseAsset(
     val name: String = "",
-    @SerializedName("browser_download_url") val downloadUrl: String = "",
+    @SerialName("browser_download_url") val downloadUrl: String = "",
     val size: Long = 0
 )
