@@ -192,6 +192,15 @@ class MainViewModel(private val context: Context) : ViewModel() {
     }
 
     fun getCurrentMangaCoverUrl(): String? = currentMangaCoverUrl
+    fun getCurrentMangaUrl(): String? = currentMangaUrl
+
+    fun resolveMangaTracking(mangaId: String): MangaTrack? {
+        var track = trackingManager.getMangaTracking(mangaId)
+        if (track == null && currentMangaUrl != null) {
+            track = trackingManager.getAllTracking().find { it.mangaUrl == currentMangaUrl }
+        }
+        return track
+    }
 
     private fun log(tag: String, msg: String) {
         Log.d("ViewModel", "[$tag] $msg")
@@ -311,14 +320,35 @@ class MainViewModel(private val context: Context) : ViewModel() {
     }
 
     fun updateTrackingStatus(mangaId: String, status: com.blissless.oni.data.ReadingStatus) {
-        trackingManager.updateTrackingStatus(mangaId, status)
+        val existing = resolveMangaTracking(mangaId)
+        val effectiveId: String
+        if (existing != null) {
+            trackingManager.updateTrackingStatus(existing.mangaId, status)
+            effectiveId = existing.mangaId
+        } else {
+            val track = MangaTrack(
+                mangaId = mangaId,
+                title = currentMangaTitle ?: (_mangaDetail.value?.title ?: ""),
+                coverUrl = currentMangaCoverUrl,
+                currentChapterIndex = 0,
+                currentChapterNumber = 0,
+                currentChapterUrl = "",
+                totalChapters = _mangaDetail.value?.totalChapterCount ?: 0,
+                status = status,
+                lastReadTimestamp = System.currentTimeMillis(),
+                mangaUrl = currentMangaUrl ?: "https://atsu.moe/manga/$mangaId"
+            )
+            trackingManager.updateTracking(track)
+            effectiveId = mangaId
+        }
         refreshTrackingLists()
-        // Send AniList status update
-        val tracking = trackingManager.getMangaTracking(mangaId)
+        val tracking = trackingManager.getMangaTracking(effectiveId)
         if (tracking != null) {
             updateAnilistProgressNow(tracking)
         }
     }
+
+
 
     fun continueFromTracking(track: com.blissless.oni.data.MangaTrack, onReady: () -> Unit) {
         val mangaId = extractUniqueMangaId(track.mangaId, track.mangaUrl)

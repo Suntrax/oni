@@ -132,7 +132,7 @@ fun MangaDetailScreen(
     fun refreshTracking() {
         detail?.id?.let { mangaId ->
             viewModel.refreshTrackingLists()
-            val tracking = viewModel.getMangaTracking(mangaId)
+            val tracking = viewModel.resolveMangaTracking(mangaId)
             currentStatus = tracking?.status
             currentChapter = if (tracking != null && tracking.currentChapterNumber > 0) {
                 tracking.currentChapterNumber
