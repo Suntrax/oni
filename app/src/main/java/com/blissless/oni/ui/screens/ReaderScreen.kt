@@ -121,6 +121,9 @@ fun ReaderScreen(
         if (selectedIndex < 0) {
             viewModel.refreshTrackingLists()
         }
+        if (selectedIndex >= 0) {
+            listState.scrollToItem(0)
+        }
     }
     
     LaunchedEffect(listState) {
@@ -132,9 +135,10 @@ fun ReaderScreen(
 
             val firstVisibleItem = layoutInfo.visibleItemsInfo.firstOrNull() ?: return@snapshotFlow 0f
             val itemSize = firstVisibleItem.size
+            val viewportHeight = layoutInfo.viewportSize.height
 
             val currentScroll = listState.firstVisibleItemIndex.toFloat() * itemSize.toFloat() + listState.firstVisibleItemScrollOffset.toFloat()
-            val maxScroll = (totalItems - 1).toFloat() * itemSize.toFloat()
+            val maxScroll = (totalItems.toFloat() * itemSize.toFloat() - viewportHeight.toFloat()).coerceAtLeast(0f)
             (currentScroll / maxScroll).coerceIn(0f, 1f)
         }.collect { progress: Float ->
             scrollProgress = progress
@@ -143,12 +147,7 @@ fun ReaderScreen(
     }
     
     BackHandler {
-        if (isShowingChapterList || selectedIndex < 0) {
-            onBack()
-        } else {
-            isShowingChapterList = true
-            viewModel.selectChapter(-1)
-        }
+        onBack()
     }
 
     Scaffold(

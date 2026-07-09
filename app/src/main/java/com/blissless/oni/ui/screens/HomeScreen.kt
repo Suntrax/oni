@@ -12,6 +12,7 @@ import androidx.compose.foundation.layout.Spacer
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
+import androidx.compose.foundation.layout.heightIn
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.layout.width
@@ -266,7 +267,8 @@ fun TrackingCard(
                     fontWeight = FontWeight.Medium,
                     maxLines = 2,
                     overflow = TextOverflow.Ellipsis,
-                    letterSpacing = 0.2.sp
+                    letterSpacing = 0.2.sp,
+                    modifier = Modifier.heightIn(min = 36.dp)
                 )
                 Spacer(modifier = Modifier.height(6.dp))
                 Row(
