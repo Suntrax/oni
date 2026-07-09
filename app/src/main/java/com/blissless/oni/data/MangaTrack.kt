@@ -11,7 +11,8 @@ data class MangaTrack(
     val status: ReadingStatus,
     val lastReadTimestamp: Long,
     val mangaUrl: String,
-    val anilistMediaId: Int? = null
+    val anilistMediaId: Int? = null,
+    val scrollProgress: Float = 0f
 )
 
 enum class ReadingStatus {

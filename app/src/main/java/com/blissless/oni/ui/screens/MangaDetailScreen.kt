@@ -732,7 +732,7 @@ fun MangaDetailScreen(
                 totalChapters = detail?.totalChapterCount ?: 0,
                 onSet = { chapter ->
                     viewModel.setManualChapterProgress(chapter)
-                    currentChapter = chapter + 1
+                    currentChapter = chapter
                     showChapterDialog = false
                 },
                 onDismiss = { showChapterDialog = false }
@@ -755,12 +755,12 @@ fun ChapterProgressDialog(
         containerColor = DarkSurface,
         shape = RoundedCornerShape(20.dp),
         title = {
-            Text("Set Chapter Progress", color = Color.White, fontWeight = FontWeight.Bold)
+            Text("Enter the chapter you last read", color = Color.White, fontWeight = FontWeight.Bold)
         },
         text = {
             Column {
                 Text(
-                    text = "Enter the chapter you're currently on (1-$totalChapters):",
+                    text = "Type an exact chapter number (up to $totalChapters):",
                     color = SilverDark,
                     fontSize = 13.sp
                 )
@@ -786,7 +786,7 @@ fun ChapterProgressDialog(
             Button(
                 onClick = {
                     val chapter = input.toIntOrNull()
-                    if (chapter != null && chapter in 1..totalChapters.coerceAtLeast(1)) {
+                    if (chapter != null && chapter >= 1) {
                         onSet(chapter)
                     }
                 },

@@ -111,6 +111,7 @@ fun ReaderScreen(
     val readChapterIndices by viewModel.readChapterIndices.collectAsState()
     val nextChapterToRead by viewModel.nextChapterToRead.collectAsState()
     val syncThreshold by viewModel.anilistSyncThreshold.collectAsState()
+    val resumeScrollProgress by viewModel.resumeScrollProgress.collectAsState()
 
     val listState = rememberLazyListState()
     var isShowingChapterList by remember { mutableStateOf(selectedIndex < 0) }
@@ -121,7 +122,7 @@ fun ReaderScreen(
         if (selectedIndex < 0) {
             viewModel.refreshTrackingLists()
         }
-        if (selectedIndex >= 0) {
+        if (selectedIndex >= 0 && resumeScrollProgress < 0f) {
             listState.scrollToItem(0)
         }
     }
@@ -143,6 +144,20 @@ fun ReaderScreen(
         }.collect { progress: Float ->
             scrollProgress = progress
             viewModel.onChapterScrollProgress(progress)
+        }
+    }
+
+    // Scroll to saved resume position after images load
+    LaunchedEffect(resumeScrollProgress, chapterImages) {
+        if (resumeScrollProgress >= 0f && chapterImages is UiState.Success) {
+            val images = (chapterImages as UiState.Success).data.images
+            if (images.isNotEmpty()) {
+                val targetIndex = (resumeScrollProgress * images.size).toInt()
+                    .coerceIn(0, images.size - 1)
+                delay(200)
+                listState.scrollToItem(targetIndex)
+                viewModel.clearResumeScrollProgress()
+            }
         }
     }
     

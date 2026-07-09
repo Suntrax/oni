@@ -122,6 +122,14 @@ fun OniApp(viewModel: MainViewModel) {
                         viewModel.continueFromTracking(track) {
                             currentScreen = Screen.Reader
                         }
+                    },
+                    onResumeReading = { track ->
+                        viewModel.resumeFromTracking(track) {
+                            currentScreen = Screen.Reader
+                        }
+                    },
+                    onRemoveResumeTracking = { track ->
+                        viewModel.clearResumeProgress(track.mangaId)
                     }
                 )
                 "search" -> SearchScreen(

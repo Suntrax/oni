@@ -59,10 +59,20 @@ class TrackingManager(context: Context) {
                 currentChapterIndex = chapterIndex,
                 currentChapterUrl = chapterUrl,
                 lastReadTimestamp = System.currentTimeMillis(),
-                status = ReadingStatus.READING
+                status = ReadingStatus.READING,
+                scrollProgress = 0f
             )
             updateTracking(updated)
         }
+    }
+
+    fun updateScrollProgress(mangaId: String, scrollProgress: Float) {
+        val existing = getMangaTracking(mangaId) ?: return
+        val updated = existing.copy(
+            scrollProgress = scrollProgress,
+            lastReadTimestamp = System.currentTimeMillis()
+        )
+        updateTracking(updated)
     }
 
     fun markAsReading(mangaId: String, title: String, coverUrl: String?, mangaUrl: String, totalChapters: Int, resetProgress: Boolean = false) {
@@ -102,12 +112,27 @@ class TrackingManager(context: Context) {
                 currentChapterNumber = chapterNumber,
                 currentChapterUrl = chapterUrl,
                 lastReadTimestamp = System.currentTimeMillis(),
-                status = ReadingStatus.READING
+                status = ReadingStatus.READING,
+                scrollProgress = 0f
             )
             updateTracking(updated)
         }
     }
     
+    fun rollbackChapterProgress(mangaId: String, chapterIndex: Int, chapterNumber: Int, chapterUrl: String) {
+        val existing = getMangaTracking(mangaId)
+        if (existing != null) {
+            val updated = existing.copy(
+                currentChapterIndex = chapterIndex,
+                currentChapterNumber = chapterNumber,
+                currentChapterUrl = chapterUrl,
+                lastReadTimestamp = System.currentTimeMillis(),
+                status = ReadingStatus.READING
+            )
+            updateTracking(updated)
+        }
+    }
+
     fun markAsPlanning(mangaId: String, title: String, coverUrl: String?, mangaUrl: String, totalChapters: Int) {
         val existing = getMangaTracking(mangaId)
         if (existing != null) {
@@ -159,6 +184,14 @@ class TrackingManager(context: Context) {
         }
     }
     
+    fun resetScrollProgress(mangaId: String) {
+        val existing = getMangaTracking(mangaId)
+        if (existing != null) {
+            val updated = existing.copy(scrollProgress = 0f)
+            updateTracking(updated)
+        }
+    }
+
     fun removeTracking(mangaId: String) {
         val all = getAllTracking().filter { it.mangaId != mangaId }
         saveAll(all)

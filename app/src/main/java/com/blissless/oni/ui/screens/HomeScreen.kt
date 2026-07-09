@@ -11,6 +11,7 @@ import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.Spacer
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
+import androidx.compose.foundation.layout.fillMaxHeight
 import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.heightIn
 import androidx.compose.foundation.layout.padding
@@ -59,12 +60,193 @@ import com.blissless.oni.ui.theme.SilverDark
 import com.blissless.oni.ui.theme.SilverLight
 
 @Composable
+fun ResumeTrackCard(
+    track: MangaTrack,
+    onClick: () -> Unit,
+    onRemoveClick: (() -> Unit)? = null
+) {
+    val progress = track.scrollProgress.coerceIn(0f, 1f)
+    val progressPercent = (progress * 100).toInt()
+
+    Card(
+        modifier = Modifier
+            .width(140.dp)
+            .clip(RoundedCornerShape(16.dp))
+            .clickable(onClick = onClick),
+        shape = RoundedCornerShape(16.dp),
+        colors = CardDefaults.cardColors(containerColor = DarkCard),
+        elevation = CardDefaults.cardElevation(defaultElevation = 0.dp),
+        border = BorderStroke(0.5.dp, GlassStroke)
+    ) {
+        Column {
+            Box(
+                modifier = Modifier
+                    .fillMaxWidth()
+                    .height(210.dp)
+                    .background(DarkSurface),
+                contentAlignment = Alignment.Center
+            ) {
+                if (track.coverUrl != null) {
+                    AsyncImage(
+                        model = track.coverUrl,
+                        contentDescription = track.title,
+                        modifier = Modifier.fillMaxSize(),
+                        contentScale = ContentScale.Crop
+                    )
+                } else {
+                    Text(
+                        text = track.title.take(2).uppercase(),
+                        style = MaterialTheme.typography.titleLarge,
+                        color = BlueAccent,
+                        fontWeight = FontWeight.Bold
+                    )
+                }
+
+                Box(
+                    modifier = Modifier
+                        .fillMaxWidth()
+                        .height(40.dp)
+                        .background(
+                            Brush.verticalGradient(
+                                colors = listOf(
+                                    Color.Transparent,
+                                    DarkCard.copy(alpha = 0.95f)
+                                )
+                            )
+                        )
+                        .align(Alignment.TopCenter)
+                )
+
+                Text(
+                    text = "$progressPercent%",
+                    style = MaterialTheme.typography.labelMedium,
+                    color = BlueAccent,
+                    fontWeight = FontWeight.Bold,
+                    modifier = Modifier
+                        .align(Alignment.TopStart)
+                        .padding(8.dp)
+                        .background(
+                            DarkCard.copy(alpha = 0.8f),
+                            RoundedCornerShape(6.dp)
+                        )
+                        .padding(horizontal = 6.dp, vertical = 2.dp)
+                )
+
+                // Gradient overlay at bottom
+                Box(
+                    modifier = Modifier
+                        .fillMaxWidth()
+                        .height(120.dp)
+                        .background(
+                            Brush.verticalGradient(
+                                colors = listOf(
+                                    Color.Transparent,
+                                    DarkCard.copy(alpha = 0.9f)
+                                )
+                            )
+                        )
+                        .align(Alignment.BottomCenter)
+                )
+
+                // Progress bar at bottom of image
+                Box(
+                    modifier = Modifier
+                        .fillMaxWidth()
+                        .height(4.dp)
+                        .align(Alignment.BottomCenter)
+                        .background(Color.White.copy(alpha = 0.15f))
+                ) {
+                    Box(
+                        modifier = Modifier
+                            .fillMaxWidth(progress)
+                            .fillMaxHeight()
+                            .background(
+                                Brush.horizontalGradient(
+                                    colors = listOf(GradientBlue, GradientPurple)
+                                )
+                            )
+                    )
+                }
+
+                if (onRemoveClick != null) {
+                    Box(
+                        modifier = Modifier
+                            .align(Alignment.TopEnd)
+                            .padding(6.dp)
+                            .size(26.dp)
+                            .background(Color.Black.copy(alpha = 0.7f), CircleShape)
+                            .clickable(onClick = onRemoveClick),
+                        contentAlignment = Alignment.Center
+                    ) {
+                        Icon(
+                            imageVector = Icons.Default.Close,
+                            contentDescription = "Remove",
+                            tint = Color.White,
+                            modifier = Modifier.size(14.dp)
+                        )
+                    }
+                }
+            }
+
+            Column(
+                modifier = Modifier
+                    .fillMaxWidth()
+                    .padding(horizontal = 10.dp, vertical = 8.dp)
+            ) {
+                Text(
+                    text = track.title,
+                    style = MaterialTheme.typography.bodySmall,
+                    color = Color.White,
+                    fontWeight = FontWeight.Medium,
+                    maxLines = 2,
+                    overflow = TextOverflow.Ellipsis,
+                    letterSpacing = 0.2.sp,
+                    modifier = Modifier.heightIn(min = 36.dp)
+                )
+                Spacer(modifier = Modifier.height(6.dp))
+                Row(
+                    modifier = Modifier.fillMaxWidth(),
+                    horizontalArrangement = Arrangement.SpaceBetween,
+                    verticalAlignment = Alignment.CenterVertically
+                ) {
+                    Text(
+                        text = "Ch. ${if (track.currentChapterNumber > 0) track.currentChapterNumber + 1 else track.currentChapterIndex + 2}",
+                        style = MaterialTheme.typography.labelSmall,
+                        color = BlueLight,
+                        fontWeight = FontWeight.SemiBold,
+                        letterSpacing = 0.3.sp
+                    )
+                    Box(
+                        modifier = Modifier
+                            .size(32.dp)
+                            .clip(CircleShape)
+                            .background(BlueAccent.copy(alpha = 0.2f))
+                            .clickable(onClick = onClick),
+                        contentAlignment = Alignment.Center
+                    ) {
+                        Icon(
+                            imageVector = Icons.Default.PlayArrow,
+                            contentDescription = "Resume",
+                    tint = BlueAccent,
+                    modifier = Modifier.size(18.dp)
+                        )
+            }
+        }
+    }
+}
+}
+}
+
+@Composable
 fun HomeScreen(
     viewModel: MainViewModel,
     onMangaSelected: (MangaSearchResult) -> Unit,
-    onContinueReading: (MangaTrack) -> Unit
+    onContinueReading: (MangaTrack) -> Unit,
+    onResumeReading: (MangaTrack) -> Unit = onContinueReading,
+    onRemoveResumeTracking: (MangaTrack) -> Unit = {}
 ) {
     val continueReading by viewModel.continueReading.collectAsState()
+    val resumeReading by viewModel.resumeReading.collectAsState()
     val planningToRead by viewModel.planningToRead.collectAsState()
 
     LaunchedEffect(Unit) {
@@ -78,6 +260,33 @@ fun HomeScreen(
         contentPadding = PaddingValues(bottom = 100.dp, top = 16.dp),
         verticalArrangement = Arrangement.spacedBy(24.dp)
     ) {
+        if (resumeReading.isNotEmpty()) {
+            item {
+                Column {
+                    Text(
+                        text = "Resume Reading",
+                        style = MaterialTheme.typography.titleMedium,
+                        color = Color.White,
+                        fontWeight = FontWeight.Bold,
+                        modifier = Modifier.padding(horizontal = 16.dp, vertical = 8.dp)
+                    )
+
+                    LazyRow(
+                        contentPadding = PaddingValues(horizontal = 16.dp),
+                        horizontalArrangement = Arrangement.spacedBy(12.dp)
+                    ) {
+                        items(resumeReading) { track ->
+                            ResumeTrackCard(
+                                track = track,
+                                onClick = { onResumeReading(track) },
+                                onRemoveClick = { onRemoveResumeTracking(track) }
+                            )
+                        }
+                    }
+                }
+            }
+        }
+
         if (continueReading.isNotEmpty()) {
             item {
                 TrackingSection(
@@ -126,7 +335,7 @@ fun HomeScreen(
             }
         }
 
-        if (continueReading.isEmpty() && planningToRead.isEmpty()) {
+        if (continueReading.isEmpty() && planningToRead.isEmpty() && resumeReading.isEmpty()) {
             item {
                 Box(
                     modifier = Modifier
@@ -298,9 +507,9 @@ fun TrackingCard(
                             tint = BlueAccent,
                             modifier = Modifier.size(18.dp)
                         )
-                    }
-                }
             }
         }
     }
+}
+}
 }
