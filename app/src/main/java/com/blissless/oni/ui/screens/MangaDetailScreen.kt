@@ -370,7 +370,7 @@ fun MangaDetailScreen(
                                 Icon(Icons.Default.PlayArrow, contentDescription = null, modifier = Modifier.size(20.dp))
                                 Spacer(Modifier.width(8.dp))
                                 Text(
-                                    text = if (currentStatus == ReadingStatus.READING) "Ch. $currentChapter" else "Start Reading",
+                                    text = if (currentStatus == ReadingStatus.READING) "Ch. ${currentChapter + 1}" else "Start Reading",
                                     fontWeight = FontWeight.Bold,
                                     fontSize = 14.sp,
                                     letterSpacing = 0.3.sp

@@ -128,12 +128,14 @@ fun ReaderScreen(
             val layoutInfo = listState.layoutInfo
             val totalItems = layoutInfo.totalItemsCount
             if (totalItems == 0) return@snapshotFlow 0f
-            
-            val firstVisibleItem = layoutInfo.visibleItemsInfo.firstOrNull()?.index ?: 0
-            val lastVisibleItem = layoutInfo.visibleItemsInfo.lastOrNull()?.index ?: 0
-            val progress = if (totalItems <= 1) 1f 
-                else (firstVisibleItem.toFloat() + lastVisibleItem.toFloat()) / (2f * (totalItems - 1).toFloat())
-            progress.coerceIn(0f, 1f)
+            if (totalItems <= 1) return@snapshotFlow 1f
+
+            val firstVisibleItem = layoutInfo.visibleItemsInfo.firstOrNull() ?: return@snapshotFlow 0f
+            val itemSize = firstVisibleItem.size
+
+            val currentScroll = listState.firstVisibleItemIndex.toFloat() * itemSize.toFloat() + listState.firstVisibleItemScrollOffset.toFloat()
+            val maxScroll = (totalItems - 1).toFloat() * itemSize.toFloat()
+            (currentScroll / maxScroll).coerceIn(0f, 1f)
         }.collect { progress: Float ->
             scrollProgress = progress
             viewModel.onChapterScrollProgress(progress)
@@ -863,15 +865,17 @@ fun ChapterRow(
     isNextToRead: Boolean,
     onClick: () -> Unit
 ) {
+    val showAsNext = isNextToRead && !isRead
     val accentColor = when {
-        isSelected -> BlueAccent
+        isSelected && !showAsNext -> BlueAccent
+        showAsNext -> BlueLight
         isRead -> ReadGreen
-        isNextToRead -> BlueLight
+        isSelected -> BlueAccent
         else -> Color.Transparent
     }
 
     val bgColor = when {
-        isSelected -> CurrentBlueGlow
+        isSelected && !showAsNext -> CurrentBlueGlow
         else -> Color.Transparent
     }
 
@@ -902,6 +906,7 @@ fun ChapterRow(
                 text = "Ch. $chNum",
                 style = MaterialTheme.typography.bodyMedium,
                 color = when {
+                    showAsNext -> BlueLight
                     isSelected -> BlueAccent
                     isRead -> ReadGreen.copy(alpha = 0.8f)
                     else -> SilverLight
@@ -916,6 +921,7 @@ fun ChapterRow(
                 text = chapter.title ?: "",
                 style = MaterialTheme.typography.bodyMedium,
                 color = when {
+                    showAsNext -> Color.White
                     isSelected -> Color.White
                     isNextToRead -> Color.White
                     isRead -> SilverDark
@@ -929,14 +935,14 @@ fun ChapterRow(
             Spacer(modifier = Modifier.width(8.dp))
 
             when {
-                isSelected -> {
+                isSelected && !showAsNext -> {
                     Box(
                         modifier = Modifier
                             .size(8.dp)
                             .background(BlueAccent, CircleShape)
                     )
                 }
-                isNextToRead && !isRead -> {
+                showAsNext -> {
                     Box(
                         modifier = Modifier
                             .size(8.dp)
@@ -953,7 +959,7 @@ fun ChapterRow(
             }
         }
 
-        if (isSelected) {
+        if (isSelected && !showAsNext) {
             Box(
                 modifier = Modifier
                     .fillMaxWidth()

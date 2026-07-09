@@ -462,7 +462,7 @@ class MainViewModel(private val context: Context) : ViewModel() {
         if (chapterList.isNotEmpty()) {
             val safeChapterIndex = nextChapterIndex.coerceIn(0, chapterList.lastIndex.coerceAtLeast(0))
             _readChapterIndices.value = (0 until safeChapterIndex).toSet()
-            _nextChapterToRead.value = safeChapterIndex + 1
+            _nextChapterToRead.value = safeChapterIndex
             
             val chapter = chapterList.getOrNull(safeChapterIndex)
             if (chapter != null) {
@@ -485,7 +485,7 @@ class MainViewModel(private val context: Context) : ViewModel() {
                     val safeChapterIndex = nextChapterIndex.coerceIn(0, chapterList.lastIndex.coerceAtLeast(0))
                     
                     _readChapterIndices.value = (0 until safeChapterIndex).toSet()
-                    _nextChapterToRead.value = safeChapterIndex + 1
+                    _nextChapterToRead.value = safeChapterIndex
                     
                     val chapter = chapterList.getOrNull(safeChapterIndex)
                     if (chapter != null) {
@@ -508,6 +508,7 @@ class MainViewModel(private val context: Context) : ViewModel() {
         if (scrollPercent >= threshold && _selectedChapterIndex.value >= 0) {
             _isChapterRead.value = true
             _readChapterIndices.value = _readChapterIndices.value + _selectedChapterIndex.value
+            _nextChapterToRead.value = _selectedChapterIndex.value + 1
             currentMangaId?.let { mangaId ->
                 val chapter = _chapters.value.getOrNull(_selectedChapterIndex.value)
                 if (chapter != null) {
