@@ -4,6 +4,7 @@ import android.content.Context
 import android.content.Intent
 import android.content.pm.PackageManager
 import android.net.Uri
+import android.text.Html
 import android.util.Log
 import androidx.lifecycle.ViewModel
 import androidx.lifecycle.ViewModelProvider
@@ -14,6 +15,7 @@ import com.blissless.oni.data.ChapterImages
 import com.blissless.oni.data.HomeSection
 import com.blissless.oni.data.MangaDetail
 import com.blissless.oni.data.MangaRepository
+import com.blissless.oni.data.AniListSearchResult
 import com.blissless.oni.data.MangaSearchResult
 import com.blissless.oni.data.MangaTrack
 import com.blissless.oni.data.ReadingStatus
@@ -54,8 +56,8 @@ class MainViewModel(private val context: Context) : ViewModel() {
     private val _searchQuery = MutableStateFlow("")
     val searchQuery: StateFlow<String> = _searchQuery.asStateFlow()
 
-    private val _searchResults = MutableStateFlow<UiState<List<MangaSearchResult>>>(UiState.Idle)
-    val searchResults: StateFlow<UiState<List<MangaSearchResult>>> = _searchResults.asStateFlow()
+    private val _searchResults = MutableStateFlow<UiState<List<AniListSearchResult>>>(UiState.Idle)
+    val searchResults: StateFlow<UiState<List<AniListSearchResult>>> = _searchResults.asStateFlow()
 
     private val _homeSections = MutableStateFlow<List<HomeSection>>(emptyList())
     val homeSections: StateFlow<List<HomeSection>> = _homeSections.asStateFlow()
@@ -634,13 +636,13 @@ class MainViewModel(private val context: Context) : ViewModel() {
             }
         }
 
-        Log.d("SEARCH", "Executing search for: '$query'")
+        Log.d("SEARCH", "Executing AniList search for: '$query'")
         lastSearchedQuery = query
         searchJob?.cancel()
         searchJob = viewModelScope.launch {
             _searchResults.value = UiState.Loading
-            Log.d("SEARCH", "Loading state set, about to call repository")
-            val result = repository.search(query)
+            Log.d("SEARCH", "Loading state set, about to call AniList")
+            val result = anilistManager.searchManga(query)
             if (_searchQuery.value != query) {
                 Log.d("SEARCH", "Query changed during search ('$query' -> '${_searchQuery.value}'), ignoring results")
                 return@launch
@@ -650,6 +652,97 @@ class MainViewModel(private val context: Context) : ViewModel() {
                 onFailure = { UiState.Error(it.message ?: "Search failed") }
             )
             Log.d("SEARCH", "Results: ${(_searchResults.value as? UiState.Success)?.data?.size ?: 0} items")
+        }
+    }
+
+    fun searchMangaAdvanced(
+        query: String?,
+        genres: List<String>?,
+        format: String?,
+        status: String?,
+        sort: String?,
+        page: Int,
+        perPage: Int,
+        onResult: (List<AniListSearchResult>) -> Unit,
+        onError: (String) -> Unit
+    ) {
+        viewModelScope.launch {
+            val result = anilistManager.searchMangaAdvanced(
+                search = query,
+                genres = genres,
+                format = format,
+                status = status,
+                sort = sort,
+                page = page,
+                perPage = perPage
+            )
+            result.fold(
+                onSuccess = { onResult(it) },
+                onFailure = { onError(it.message ?: "Search failed") }
+            )
+        }
+    }
+
+    fun selectManga(manga: AniListSearchResult) {
+        log("SELECT", "Selected from AniList: ${manga.title} (id=${manga.id})")
+        val mangaId = "anilist_${manga.id}"
+        currentMangaId = mangaId
+        currentMangaTitle = manga.title
+        currentMangaCoverUrl = manga.coverUrl
+        currentMangaUrl = null
+        _mangaDetail.value = null
+        _isLoading.value = true
+
+        viewModelScope.launch {
+            val titleToTry = listOfNotNull(
+                manga.title,
+                manga.englishTitle,
+                manga.nativeTitle
+            ).firstOrNull { it.isNotBlank() } ?: manga.title
+
+            val matchResult = repository.search(titleToTry)
+            val matched = matchResult.getOrNull()?.firstOrNull { match ->
+                match.title.contains(manga.title, ignoreCase = true) ||
+                (manga.englishTitle != null && match.title.contains(manga.englishTitle, ignoreCase = true))
+            }
+
+            if (matched != null) {
+                log("SELECT", "Matched to source manga: ${matched.title}, url: ${matched.url}")
+                currentMangaUrl = matched.url
+                currentMangaCoverUrl = matched.coverUrl ?: manga.coverUrl
+                val resolvedMangaId = matched.mangaId ?: extractUniqueMangaId(
+                    matched.url.substringAfter("/manga/").substringBefore("?"),
+                    matched.url
+                )
+                currentMangaId = resolvedMangaId
+                loadMangaDetails(matched.url, currentMangaCoverUrl)
+                loadReadChapters(resolvedMangaId)
+            } else {
+                log("WARN", "No atsu.moe match found for '${manga.title}', using AniList data")
+                currentMangaId = mangaId
+                currentMangaTitle = manga.title
+                currentMangaCoverUrl = manga.coverUrl
+                currentMangaUrl = "https://anilist.co/manga/${manga.id}"
+                val description = manga.description?.let { stripHtml(it) } ?: ""
+                _mangaDetail.value = com.blissless.oni.data.MangaDetail(
+                    id = mangaId,
+                    title = manga.title,
+                    englishTitle = manga.englishTitle,
+                    synopsis = description,
+                    coverUrl = manga.coverUrl,
+                    bannerUrl = null,
+                    genres = manga.genres ?: emptyList(),
+                    status = manga.status?.let { formatStatus(it) } ?: "",
+                    type = manga.format ?: "",
+                    avgRating = (manga.meanScore ?: 0).toDouble() / 10.0,
+                    totalChapterCount = manga.chapters ?: 0,
+                    otherNames = listOfNotNull(manga.nativeTitle, manga.englishTitle).filter { it != manga.title },
+                    authors = emptyList()
+                )
+                _chapters.value = emptyList()
+                _isLoading.value = false
+                refreshTrackingLists()
+            }
         }
     }
 
@@ -1222,12 +1315,31 @@ class MainViewModel(private val context: Context) : ViewModel() {
         settingsManager.setAniListSyncThreshold(percent)
         _anilistSyncThreshold.value = percent
     }
+
+    private fun stripHtml(html: String): String {
+        return if (android.os.Build.VERSION.SDK_INT >= android.os.Build.VERSION_CODES.N) {
+            Html.fromHtml(html, Html.FROM_HTML_MODE_LEGACY).toString()
+        } else {
+            @Suppress("DEPRECATION")
+            Html.fromHtml(html).toString()
+        }
+    }
+
+    private fun formatStatus(status: String): String = when (status.uppercase()) {
+        "RELEASING" -> "Ongoing"
+        "FINISHED" -> "Completed"
+        "NOT_YET_RELEASED" -> "Not Released"
+        "CANCELLED" -> "Cancelled"
+        "HIATUS" -> "On Hiatus"
+        else -> status
+    }
+
 }
 
 class MainViewModelFactory(private val context: Context) : ViewModelProvider.Factory {
+    @Suppress("UNCHECKED_CAST")
     override fun <T : ViewModel> create(modelClass: Class<T>): T {
         if (modelClass.isAssignableFrom(MainViewModel::class.java)) {
-            @Suppress("UNCHECKED_CAST")
             return MainViewModel(context) as T
         }
         throw IllegalArgumentException("Unknown ViewModel class")

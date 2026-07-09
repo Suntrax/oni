@@ -10,8 +10,24 @@ import okhttp3.MediaType.Companion.toMediaType
 import okhttp3.OkHttpClient
 import okhttp3.Request
 import okhttp3.RequestBody.Companion.toRequestBody
+import org.json.JSONArray
 import org.json.JSONObject
 import java.util.concurrent.TimeUnit
+
+data class AniListSearchResult(
+    val id: Int,
+    val title: String,
+    val englishTitle: String? = null,
+    val nativeTitle: String? = null,
+    val coverUrl: String? = null,
+    val description: String? = null,
+    val chapters: Int? = null,
+    val volumes: Int? = null,
+    val status: String? = null,
+    val genres: List<String>? = null,
+    val meanScore: Int? = null,
+    val format: String? = null
+)
 
 data class AniListMangaEntry(
     val mediaId: Int,
@@ -70,6 +86,135 @@ class AniListManager(private val context: Context) {
     }
 
     fun isLoggedIn(): Boolean = !prefs.getString(KEY_ACCESS_TOKEN, "").isNullOrBlank()
+
+    suspend fun searchManga(query: String): Result<List<AniListSearchResult>> {
+        val searchQuery = """
+            query (${'$'}search: String) {
+              Page(perPage: 50) {
+                media(search: ${'$'}search, type: MANGA) {
+                  id
+                  title { romaji english native }
+                  coverImage { large }
+                  description
+                  chapters
+                  volumes
+                  status
+                  genres
+                  averageScore
+                  format
+                  siteUrl
+                }
+              }
+            }
+        """.trimIndent()
+
+        return withContext(Dispatchers.IO) {
+            try {
+                val variables = JSONObject().apply { put("search", query) }
+                executeGraphQL(searchQuery, variables)
+            } catch (e: Exception) {
+                Result.failure(e)
+            }
+        }
+    }
+
+    suspend fun searchMangaAdvanced(
+        search: String? = null,
+        genres: List<String>? = null,
+        format: String? = null,
+        status: String? = null,
+        sort: String? = null,
+        page: Int = 1,
+        perPage: Int = 30,
+    ): Result<List<AniListSearchResult>> {
+        val searchQuery = """
+            query (${'$'}search: String, ${'$'}genres: [String], ${'$'}format: MediaFormat, ${'$'}status: MediaStatus, ${'$'}sort: [MediaSort], ${'$'}page: Int, ${'$'}perPage: Int) {
+              Page(page: ${'$'}page, perPage: ${'$'}perPage) {
+                media(search: ${'$'}search, genre_in: ${'$'}genres, format: ${'$'}format, status: ${'$'}status, sort: ${'$'}sort, type: MANGA) {
+                  id
+                  title { romaji english native }
+                  coverImage { large }
+                  description
+                  chapters
+                  volumes
+                  status
+                  genres
+                  averageScore
+                  format
+                  siteUrl
+                }
+              }
+            }
+        """.trimIndent()
+
+        return withContext(Dispatchers.IO) {
+            try {
+                val variables = JSONObject()
+                if (!search.isNullOrBlank()) variables.put("search", search)
+                if (!genres.isNullOrEmpty()) variables.put("genres", JSONArray(genres))
+                if (format != null) variables.put("format", format)
+                if (status != null) variables.put("status", status)
+                variables.put("page", page)
+                variables.put("perPage", perPage)
+                val sortList = sort?.let { JSONArray(listOf(it)) } ?: JSONArray(listOf("SEARCH_MATCH"))
+                variables.put("sort", sortList)
+                executeGraphQL(searchQuery, variables)
+            } catch (e: Exception) {
+                Result.failure(e)
+            }
+        }
+    }
+
+    private suspend fun executeGraphQL(query: String, variables: JSONObject): Result<List<AniListSearchResult>> {
+        val jsonPayload = JSONObject().apply {
+            put("query", query)
+            put("variables", variables)
+        }
+        val body = jsonPayload.toString().toRequestBody("application/json".toMediaType())
+        val requestBuilder = Request.Builder()
+            .url(GRAPHQL_URL)
+            .addHeader("Content-Type", "application/json")
+        val token = getAccessToken()
+        if (token != null) {
+            requestBuilder.addHeader("Authorization", "Bearer $token")
+        }
+        val request = requestBuilder.post(body).build()
+        val response = client.newCall(request).execute()
+        val responseBody = response.body?.string()
+        return if (response.isSuccessful && responseBody != null) {
+            val root = JSONObject(responseBody)
+            val page = root.optJSONObject("data")?.optJSONObject("Page")
+            val mediaArray = page?.optJSONArray("media")
+            val results = mutableListOf<AniListSearchResult>()
+            if (mediaArray != null) {
+                for (i in 0 until mediaArray.length()) {
+                    val media = mediaArray.getJSONObject(i)
+                    val title = media.optJSONObject("title")
+                    val genresArray = media.optJSONArray("genres")
+                    val genres = if (genresArray != null) {
+                        (0 until genresArray.length()).map { genresArray.getString(it) }
+                    } else null
+                    results.add(AniListSearchResult(
+                        id = media.optInt("id"),
+                        title = if (title != null && !title.isNull("romaji")) title.optString("romaji") else "",
+                        englishTitle = if (title != null && !title.isNull("english")) title.optString("english") else null,
+                        nativeTitle = if (title != null && !title.isNull("native")) title.optString("native") else null,
+                        coverUrl = if (media.has("coverImage") && !media.isNull("coverImage")) media.optJSONObject("coverImage")?.optString("large") else null,
+                        description = if (media.has("description") && !media.isNull("description")) media.optString("description") else null,
+                        chapters = if (media.has("chapters") && !media.isNull("chapters")) media.optInt("chapters") else null,
+                        volumes = if (media.has("volumes") && !media.isNull("volumes")) media.optInt("volumes") else null,
+                        status = if (media.has("status") && !media.isNull("status")) media.optString("status") else "",
+                        genres = genres,
+                        meanScore = if (media.has("averageScore") && !media.isNull("averageScore")) media.optInt("averageScore") else null,
+                        format = if (media.has("format") && !media.isNull("format")) media.optString("format") else ""
+                    ))
+                }
+            }
+            Result.success(results)
+        } else {
+            Result.failure(Exception("Search error: ${response.code} $responseBody"))
+        }
+    }
 
     fun getLoggedInUser(): String? {
         val json = prefs.getString(KEY_USER_DATA, null) ?: return null
