@@ -440,10 +440,12 @@ class AniListManager(private val context: Context) {
             val genres = if (genresArray != null) {
                 (0 until genresArray.length()).map { genresArray.getString(it) }
             } else null
+            val romaji = title?.optString("romaji") ?: ""
+            val english = title?.optString("english")
             results.add(AniListSearchResult(
                 id = media.optInt("id"),
-                title = title?.optString("romaji") ?: "",
-                englishTitle = title?.optString("english"),
+                title = english?.takeIf { it.isNotBlank() } ?: romaji,
+                englishTitle = english,
                 nativeTitle = title?.optString("native"),
                 coverExtraLarge = media.optJSONObject("coverImage")?.optString("extraLarge"),
                 coverUrl = media.optJSONObject("coverImage")?.optString("extraLarge") ?: media.optJSONObject("coverImage")?.optString("large"),
@@ -728,10 +730,12 @@ class AniListManager(private val context: Context) {
                                     val entry = listEntries.getJSONObject(j)
                                     val media = entry.optJSONObject("media")
                                     val title = media?.optJSONObject("title")
+                                    val romajiTitle = title?.optString("romaji") ?: ""
+                                    val englishTitle = title?.optString("english")
                                     entries.add(AniListMangaEntry(
                                         mediaId = media?.optInt("id") ?: 0,
-                                        title = title?.optString("romaji") ?: "",
-                                        englishTitle = title?.optString("english"),
+                                        title = englishTitle?.takeIf { it.isNotBlank() } ?: romajiTitle,
+                                        englishTitle = englishTitle,
                                         nativeTitle = title?.optString("native"),
                                         coverUrl = media?.optJSONObject("coverImage")?.optString("extraLarge") ?: media?.optJSONObject("coverImage")?.optString("large"),
                                         siteUrl = media?.optString("siteUrl"),
