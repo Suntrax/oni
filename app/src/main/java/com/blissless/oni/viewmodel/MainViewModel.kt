@@ -10,12 +10,12 @@ import androidx.lifecycle.ViewModel
 import androidx.lifecycle.ViewModelProvider
 import androidx.lifecycle.viewModelScope
 import com.blissless.oni.data.AniListManager
+import com.blissless.oni.data.AniListMangaDetail
+import com.blissless.oni.data.AniListSearchResult
 import com.blissless.oni.data.ChapterInfo
 import com.blissless.oni.data.ChapterImages
-import com.blissless.oni.data.HomeSection
-import com.blissless.oni.data.MangaDetail
-import com.blissless.oni.data.MangaRepository
-import com.blissless.oni.data.AniListSearchResult
+import com.blissless.oni.data.ExploreSection
+import com.blissless.oni.data.MangaDexManager
 import com.blissless.oni.data.MangaSearchResult
 import com.blissless.oni.data.MangaTrack
 import com.blissless.oni.data.ReadingStatus
@@ -48,10 +48,10 @@ data class InstalledExtension(val label: String, val packageName: String) {
 
 class MainViewModel(private val context: Context) : ViewModel() {
 
-    private val repository = MangaRepository(context)
     private val trackingManager = TrackingManager(context)
     private val anilistManager = AniListManager(context)
     private val settingsManager = SettingsManager(context)
+    private val mangaDexManager = MangaDexManager()
 
     private val _searchQuery = MutableStateFlow("")
     val searchQuery: StateFlow<String> = _searchQuery.asStateFlow()
@@ -59,8 +59,8 @@ class MainViewModel(private val context: Context) : ViewModel() {
     private val _searchResults = MutableStateFlow<UiState<List<AniListSearchResult>>>(UiState.Idle)
     val searchResults: StateFlow<UiState<List<AniListSearchResult>>> = _searchResults.asStateFlow()
 
-    private val _homeSections = MutableStateFlow<List<HomeSection>>(emptyList())
-    val homeSections: StateFlow<List<HomeSection>> = _homeSections.asStateFlow()
+    private val _exploreSections = MutableStateFlow<List<ExploreSection>>(emptyList())
+    val exploreSections: StateFlow<List<ExploreSection>> = _exploreSections.asStateFlow()
 
     private val _continueReading = MutableStateFlow<List<MangaTrack>>(emptyList())
     val continueReading: StateFlow<List<MangaTrack>> = _continueReading.asStateFlow()
@@ -74,8 +74,8 @@ class MainViewModel(private val context: Context) : ViewModel() {
     private val _chapters = MutableStateFlow<List<ChapterInfo>>(emptyList())
     val chapters: StateFlow<List<ChapterInfo>> = _chapters.asStateFlow()
 
-    private val _mangaDetail = MutableStateFlow<MangaDetail?>(null)
-    val mangaDetail: StateFlow<MangaDetail?> = _mangaDetail.asStateFlow()
+    private val _mangaDetail = MutableStateFlow<AniListMangaDetail?>(null)
+    val mangaDetail: StateFlow<AniListMangaDetail?> = _mangaDetail.asStateFlow()
 
     private val _selectedChapterIndex = MutableStateFlow(-1)
     val selectedChapterIndex: StateFlow<Int> = _selectedChapterIndex.asStateFlow()
@@ -100,11 +100,12 @@ class MainViewModel(private val context: Context) : ViewModel() {
 
     private var lastSearchedQuery: String = ""
     private var searchJob: kotlinx.coroutines.Job? = null
-    
+
     private var currentMangaId: String? = null
     private var currentMangaTitle: String? = null
     private var currentMangaCoverUrl: String? = null
     private var currentMangaUrl: String? = null
+    private var currentMediaId: Int? = null
 
     // AniList state
     private val _anilistUsername = MutableStateFlow<String?>(null)
@@ -120,7 +121,6 @@ class MainViewModel(private val context: Context) : ViewModel() {
     val showMergeDialog: StateFlow<Boolean> = _showMergeDialog.asStateFlow()
 
     private var pendingAnilistUpdate: Job? = null
-    private var hasSyncedOnStart = false
 
     private val _pendingUpdateRelease = MutableStateFlow<GitHubRelease?>(null)
     val pendingUpdateRelease: StateFlow<GitHubRelease?> = _pendingUpdateRelease.asStateFlow()
@@ -159,6 +159,11 @@ class MainViewModel(private val context: Context) : ViewModel() {
     init {
         if (settingsManager.getCheckUpdatesOnStart()) {
             checkForUpdatesSilently()
+        }
+        if (anilistManager.isLoggedIn()) {
+            viewModelScope.launch {
+                syncAnilistManga()
+            }
         }
     }
 
@@ -214,89 +219,45 @@ class MainViewModel(private val context: Context) : ViewModel() {
         Log.d("ViewModel", "[$tag] $msg")
     }
 
-    private fun countWholeChapters(chapters: List<ChapterInfo>): Int {
-        var count = 0
-        chapters.forEach { chapter ->
-            val title = chapter.title ?: ""
-            val numStr = extractChapterNumberString(title)
-            if (numStr.contains('.') || numStr.contains(',')) return@forEach
-            val mainChapter = extractMainChapterNumber(title)
-            if (mainChapter > 0) count++
-        }
-        log("COUNT", "Whole chapters: $count / ${chapters.size}")
-        return count
-    }
+    // ======================== Explore Page ========================
 
-    private fun extractMainChapterNumber(title: String): Int {
-        val patterns = listOf(
-            Regex("Chapter\\s*(\\d+)"),
-            Regex("Ch\\s*\\.\\s*(\\d+)"),
-            Regex("^(\\d+)"),
-            Regex("(\\d+)(?:\\.\\d+)?")
-        )
-        
-        for (pattern in patterns) {
-            val match = pattern.find(title)
-            if (match != null) {
-                val numStr = match.groupValues[1]
-                return numStr.toIntOrNull() ?: 0
-            }
-        }
-        return 0
-    }
-
-    private fun extractChapterNumberString(title: String): String {
-        val patterns = listOf(
-            Regex("Chapter\\s*([\\d.]+)"),
-            Regex("Ch\\s*\\.\\s*([\\d.]+)"),
-            Regex("^([\\d.]+)"),
-            Regex("([\\d.]+)")
-        )
-        for (pattern in patterns) {
-            val match = pattern.find(title)
-            if (match != null) {
-                val numStr = match.groupValues[1].trimEnd('.')
-                if (numStr.isNotBlank() && numStr.any { it.isDigit() }) return numStr
-            }
-        }
-        return title
-    }
-
-    fun loadHomePage() {
+    fun loadExplorePage() {
         viewModelScope.launch {
             _isLoading.value = true
             refreshTrackingLists()
-            // Sync from AniList on app start (only once)
-            if (!hasSyncedOnStart && anilistManager.isLoggedIn()) {
-                hasSyncedOnStart = true
+            if (anilistManager.isLoggedIn()) {
                 syncAnilistManga()
             }
-            val result = repository.getHomePage()
+            val result = anilistManager.getExploreSections()
             result.fold(
                 onSuccess = { sections ->
-                    _homeSections.value = sections
-                    log("HOME", "Loaded ${sections.size} sections")
+                    _exploreSections.value = sections
+                    log("EXPLORE", "Loaded ${sections.size} sections")
                 },
                 onFailure = {
-                    log("ERROR", "Failed to load home: ${it.message}")
+                    log("ERROR", "Failed to load explore: ${it.message}")
                 }
             )
             _isLoading.value = false
         }
     }
-    
+
+    // ======================== Tracking ========================
+
     fun refreshTrackingLists() {
         val allReading = trackingManager.getContinueReading()
         _resumeReading.value = allReading.filter { it.scrollProgress > 0f }
         _continueReading.value = allReading
         _planningToRead.value = trackingManager.getPlanningToRead()
     }
-    
+
     fun addToPlanning(mangaId: String, title: String, coverUrl: String?, mangaUrl: String, totalChapters: Int) {
         trackingManager.markAsPlanning(mangaId, title, coverUrl, mangaUrl, totalChapters)
         refreshTrackingLists()
+        val track = trackingManager.getMangaTracking(mangaId)
+        if (track != null) updateAnilistProgressNow(track)
     }
-    
+
     fun removeFromPlanning(mangaId: String) {
         trackingManager.removeTracking(mangaId)
         refreshTrackingLists()
@@ -310,8 +271,10 @@ class MainViewModel(private val context: Context) : ViewModel() {
     fun addToReading(mangaId: String, title: String, coverUrl: String?, mangaUrl: String, totalChapters: Int, resetProgress: Boolean = false) {
         trackingManager.markAsReading(mangaId, title, coverUrl, mangaUrl, totalChapters, resetProgress)
         refreshTrackingLists()
+        val track = trackingManager.getMangaTracking(mangaId)
+        if (track != null) updateAnilistProgressNow(track)
     }
-    
+
     fun togglePlanning(mangaId: String, title: String, coverUrl: String?, mangaUrl: String, totalChapters: Int) {
         if (isInPlanning(mangaId)) {
             removeFromPlanning(mangaId)
@@ -319,140 +282,278 @@ class MainViewModel(private val context: Context) : ViewModel() {
             addToPlanning(mangaId, title, coverUrl, mangaUrl, totalChapters)
         }
     }
-    
+
     fun isInPlanning(mangaId: String): Boolean {
-        return trackingManager.getMangaTracking(mangaId)?.status == com.blissless.oni.data.ReadingStatus.PLANNING
+        return trackingManager.getMangaTracking(mangaId)?.status == ReadingStatus.PLANNING
     }
 
-    fun getMangaTracking(mangaId: String): com.blissless.oni.data.MangaTrack? {
+    fun getMangaTracking(mangaId: String): MangaTrack? {
         return trackingManager.getMangaTracking(mangaId)
     }
 
-    fun updateTrackingStatus(mangaId: String, status: com.blissless.oni.data.ReadingStatus) {
+    fun updateTrackingStatus(mangaId: String, status: ReadingStatus) {
         val existing = resolveMangaTracking(mangaId)
-        val effectiveId: String
         if (existing != null) {
-            trackingManager.updateTrackingStatus(existing.mangaId, status)
-            effectiveId = existing.mangaId
+            val updated = existing.copy(
+                status = status,
+                lastReadTimestamp = System.currentTimeMillis()
+            )
+            trackingManager.updateTracking(updated)
+            updateAnilistProgressNow(updated)
         } else {
+            val detail = _mangaDetail.value
             val track = MangaTrack(
                 mangaId = mangaId,
-                title = currentMangaTitle ?: (_mangaDetail.value?.title ?: ""),
+                title = currentMangaTitle ?: "",
                 coverUrl = currentMangaCoverUrl,
                 currentChapterIndex = 0,
                 currentChapterNumber = 0,
                 currentChapterUrl = "",
-                totalChapters = _mangaDetail.value?.totalChapterCount ?: 0,
+                totalChapters = detail?.chapters ?: 0,
                 status = status,
                 lastReadTimestamp = System.currentTimeMillis(),
-                mangaUrl = currentMangaUrl ?: "https://atsu.moe/manga/$mangaId"
+                mangaUrl = currentMangaUrl ?: "https://anilist.co/manga/${currentMediaId ?: ""}",
+                anilistMediaId = currentMediaId
             )
             trackingManager.updateTracking(track)
-            effectiveId = mangaId
+            updateAnilistProgressNow(track)
         }
         refreshTrackingLists()
-        val tracking = trackingManager.getMangaTracking(effectiveId)
-        if (tracking != null) {
-            updateAnilistProgressNow(tracking)
+    }
+
+    fun removeFromAnilist(mangaId: String) {
+        val track = resolveMangaTracking(mangaId) ?: return
+        val mediaId = track.anilistMediaId ?: extractAnilistMediaId(mangaId)
+        if (mediaId != null && anilistManager.isLoggedIn()) {
+            viewModelScope.launch {
+                anilistManager.deleteMediaListEntry(mediaId)
+            }
+        }
+        trackingManager.removeTracking(mangaId)
+        refreshTrackingLists()
+    }
+
+    // ======================== Select Manga & Load Detail ========================
+
+    fun selectManga(manga: AniListSearchResult) {
+        log("SELECT", "Selected from AniList: ${manga.title} (id=${manga.id})")
+        val mangaId = "anilist_${manga.id}"
+        currentMangaId = mangaId
+        currentMangaTitle = manga.title
+        currentMangaCoverUrl = manga.coverUrl
+        currentMangaUrl = "https://anilist.co/manga/${manga.id}"
+        currentMediaId = manga.id
+        _mangaDetail.value = null
+        _isLoading.value = true
+
+        viewModelScope.launch {
+            loadAniListDetail(manga.id, manga.coverUrl)
+            loadAniListChapters(manga.id)
+            loadReadChapters(mangaId)
         }
     }
 
+    fun selectManga(manga: MangaSearchResult) {
+        log("SELECT", "Selected from result: ${manga.title}")
+        val mediaId = extractMediaIdFromMangaId(manga.mangaId)
+        if (mediaId != null) {
+            currentMangaId = manga.mangaId
+            currentMangaTitle = manga.title
+            currentMangaCoverUrl = manga.coverUrl
+            currentMangaUrl = "https://anilist.co/manga/$mediaId"
+            currentMediaId = mediaId
+            _mangaDetail.value = null
+            _isLoading.value = true
 
+            viewModelScope.launch {
+                loadAniListDetail(mediaId, manga.coverUrl)
+                loadAniListChapters(mediaId)
+                manga.mangaId?.let { loadReadChapters(it) }
+            }
+        } else {
+            // Legacy tracking data without AniList ID - try looking up by title
+            currentMangaId = manga.mangaId
+            currentMangaTitle = manga.title
+            currentMangaCoverUrl = manga.coverUrl
+            currentMangaUrl = manga.url
+            log("WARN", "No AniList media ID for ${manga.title}, attempting search lookup")
+            viewModelScope.launch {
+                val searchResult = anilistManager.searchManga(manga.title)
+                searchResult.fold(
+                    onSuccess = { results ->
+                        val match = results.firstOrNull()
+                        if (match != null) {
+                            currentMediaId = match.id
+                            currentMangaUrl = "https://anilist.co/manga/${match.id}"
+                            currentMangaId = "anilist_${match.id}"
+                            loadAniListDetail(match.id, match.coverUrl ?: manga.coverUrl)
+                            loadAniListChapters(match.id)
+                            loadReadChapters("anilist_${match.id}")
+                        } else {
+                            _mangaDetail.value = null
+                            _isLoading.value = false
+                        }
+                    },
+                    onFailure = {
+                        _isLoading.value = false
+                    }
+                )
+            }
+        }
+    }
 
-    fun continueFromTracking(track: com.blissless.oni.data.MangaTrack, onReady: () -> Unit) {
-        val mangaId = extractUniqueMangaId(track.mangaId, track.mangaUrl)
-        currentMangaId = mangaId
+    private suspend fun loadAniListDetail(mediaId: Int, coverUrl: String?) {
+        val result = anilistManager.getMediaDetail(mediaId)
+        result.fold(
+            onSuccess = { detail ->
+                val effectiveCover = detail.coverExtraLarge ?: detail.coverLarge ?: coverUrl ?: currentMangaCoverUrl
+                currentMangaCoverUrl = effectiveCover
+                _mangaDetail.value = detail
+                currentMangaId?.let { mangaId ->
+                    val existing = trackingManager.getMangaTracking(mangaId)
+                    if (existing != null && effectiveCover != null && existing.coverUrl != effectiveCover) {
+                        trackingManager.updateTracking(existing.copy(coverUrl = effectiveCover))
+                    }
+                }
+                log("DETAIL", "Loaded: ${detail.titleRomaji}")
+                refreshTrackingLists()
+            },
+            onFailure = {
+                log("ERROR", "Failed to load detail: ${it.message}")
+            }
+        )
+        _isLoading.value = false
+    }
+
+    private fun generateChapterList(mediaId: Int, totalChapters: Int): List<ChapterInfo> {
+        if (totalChapters <= 0) return emptyList()
+        return (1..totalChapters).map { i ->
+            ChapterInfo(url = "anilist_${mediaId}_ch_$i", title = "Chapter $i")
+        }.reversed()
+    }
+
+    private suspend fun resolveChapterCount(mediaId: Int): Int {
+        val detail = _mangaDetail.value
+        val mangaId = currentMangaId
+        val tracking = mangaId?.let { trackingManager.getMangaTracking(it) }
+
+        if (detail?.chapters != null) return detail.chapters
+
+        val isOngoing = detail?.status == "RELEASING"
+
+        if (isOngoing) {
+            val title = detail?.titleEnglish ?: detail?.titleRomaji ?: currentMangaTitle
+            if (title != null) {
+                val mdChapters = mangaDexManager.getChapterCount(title, mediaId)
+                if (mdChapters != null && mdChapters > 0) {
+                    mangaId?.let { trackingManager.updateTotalChapters(it, mdChapters) }
+                    return mdChapters
+                }
+            }
+        }
+
+        return tracking?.totalChapters ?: 0
+    }
+
+    private suspend fun loadAniListChapters(mediaId: Int) {
+        val mangaId = currentMangaId
+        val totalChapters = resolveChapterCount(mediaId)
+        val chapterList = generateChapterList(mediaId, totalChapters)
+
+        _chapters.value = chapterList
+        log("CHAPTERS", "Generated ${chapterList.size} chapters for media $mediaId")
+
+        mangaId?.let { trackingManager.updateTotalChapters(it, totalChapters) }
+        refreshTrackingLists()
+        _isLoading.value = false
+    }
+
+    // ======================== Continue / Resume Reading ========================
+
+    fun continueFromTracking(track: MangaTrack, onReady: () -> Unit) {
+        val mediaId = track.anilistMediaId ?: extractAnilistMediaId(track.mangaId)
+        if (mediaId == null) {
+            log("ERROR", "No AniList media ID for tracking entry")
+            _isLoading.value = false
+            return
+        }
+        currentMediaId = mediaId
+        currentMangaId = track.mangaId
         currentMangaTitle = track.title
         currentMangaCoverUrl = track.coverUrl
         currentMangaUrl = track.mangaUrl
         _selectedChapterIndex.value = -1
         _isLoading.value = true
         _chapterImages.value = UiState.Idle
-        
+
+        refreshTrackingLists()
+
         viewModelScope.launch {
-            val detailResult = repository.getMangaDetails(track.mangaUrl)
+            val detailResult = anilistManager.getMediaDetail(mediaId)
             detailResult.fold(
                 onSuccess = { mangaDetail ->
-                    currentMangaCoverUrl = track.coverUrl ?: mangaDetail.coverUrl ?: currentMangaCoverUrl
-                    val detailWithCover = mangaDetail.copy(
-                        coverUrl = currentMangaCoverUrl
-                    )
-                    _mangaDetail.value = detailWithCover
-                    log("DETAIL", "Loaded detail with cover: ${detailWithCover.coverUrl}, track cover: ${track.coverUrl}")
+                    currentMangaCoverUrl = mangaDetail.coverExtraLarge ?: mangaDetail.coverLarge ?: track.coverUrl
+                    _mangaDetail.value = mangaDetail
+                    log("DETAIL", "Loaded detail for continue")
                 },
                 onFailure = {
                     log("ERROR", "Failed to load detail: ${it.message}")
                 }
             )
-            
-            val result = repository.getChapters(track.mangaUrl)
-            result.fold(
-                onSuccess = { chapterData ->
-                    val chapterList = chapterData.chapters
-                    _chapters.value = chapterList
-                    val totalChapters = countWholeChapters(chapterList)
-                    log("CHAPTERS", "Loaded ${chapterList.size} chapters for continue reading, total: $totalChapters")
-                    trackingManager.updateTotalChapters(mangaId, totalChapters) 
-                    refreshTrackingLists()
-                    
-                    // Find position by chapter URL or number match
-                    val savedUrl = track.currentChapterUrl
-                    var currentPosition = -1
-                    
-                    // Try URL match
-                    if (savedUrl.isNotBlank()) {
-                        currentPosition = chapterList.indexOfFirst { it.url == savedUrl }
-                        Log.d("CONTINUE", "URL match attempt: '$savedUrl', found index: $currentPosition")
-                    }
-                    
-                    // If no URL match, try by saved chapter number
-                    if (currentPosition < 0 && track.currentChapterNumber > 0) {
-                        currentPosition = chapterList.indexOfFirst { ch -> 
-                            ch.title?.contains(track.currentChapterNumber.toString()) == true
-                        }
-                        Log.d("CONTINUE", "Number match: ${track.currentChapterNumber}, found index: $currentPosition")
-                    }
-                    
-                    // Last resort: use saved index but validate it
-                    if (currentPosition < 0) {
-                        currentPosition = track.currentChapterIndex.coerceIn(0, chapterList.lastIndex)
-                        Log.d("CONTINUE", "Using fallback index: $currentPosition")
-                    }
-                    
-                    val safeChapterIndex = currentPosition.coerceIn(0, chapterList.lastIndex)
-                    val nextToRead = if (track.currentChapterNumber > 0) safeChapterIndex + 1 else 0
-                    
-                    _readChapterIndices.value = (0 until safeChapterIndex).toSet()
-                    _nextChapterToRead.value = nextToRead + 1
-                    Log.d("CONTINUE", "Final: current=$currentPosition safe=$safeChapterIndex next=$nextToRead, chapterNumber=${track.currentChapterNumber}")
-                    
-                    // Load the next chapter
-                    val chapter = chapterList.getOrNull(nextToRead)
-                    if (chapter != null) {
-                        _selectedChapterIndex.value = nextToRead
-                        _isChapterRead.value = safeChapterIndex > 0
-                        _chapterImages.value = UiState.Loading
-                        loadChapterImages(chapter.url)
-                        log("READY", "Loading next chapter: ${chapter.title}")
-                        onReady()
-                    } else {
-                        // At last chapter, load current
-                        _selectedChapterIndex.value = safeChapterIndex
-                        _chapterImages.value = UiState.Loading
-                        loadChapterImages(chapterList[safeChapterIndex].url)
-                    }
-                },
-                onFailure = {
-                    log("ERROR", "Failed to load chapters: ${it.message}")
-                    _isLoading.value = false
+
+            val totalChapters = resolveChapterCount(mediaId)
+            val chapterList = generateChapterList(mediaId, totalChapters)
+            _chapters.value = chapterList
+            trackingManager.updateTotalChapters(track.mangaId, totalChapters)
+            refreshTrackingLists()
+
+            val savedUrl = track.currentChapterUrl
+            var currentPosition = -1
+
+            if (savedUrl.isNotBlank()) {
+                currentPosition = chapterList.indexOfFirst { it.url == savedUrl }
+            }
+
+            if (currentPosition < 0 && track.currentChapterNumber > 0) {
+                currentPosition = chapterList.indexOfFirst { ch ->
+                    ch.title?.contains(track.currentChapterNumber.toString()) == true
                 }
-            )
+            }
+
+            if (currentPosition < 0) {
+                currentPosition = track.currentChapterIndex.coerceIn(0, chapterList.lastIndex.coerceAtLeast(0))
+            }
+
+            val safeChapterIndex = currentPosition.coerceIn(0, chapterList.lastIndex.coerceAtLeast(0))
+            val nextToRead = if (track.currentChapterNumber > 0) safeChapterIndex + 1 else 0
+
+            _readChapterIndices.value = (0 until safeChapterIndex).toSet()
+            _nextChapterToRead.value = nextToRead + 1
+
+            val chapter = chapterList.getOrNull(nextToRead)
+            if (chapter != null) {
+                _selectedChapterIndex.value = nextToRead
+                _isChapterRead.value = safeChapterIndex > 0
+                _chapterImages.value = UiState.Loading
+                loadChapterImages(chapter.url)
+                onReady()
+            } else {
+                _selectedChapterIndex.value = safeChapterIndex
+                _chapterImages.value = UiState.Loading
+                loadChapterImages(chapterList[safeChapterIndex].url)
+            }
         }
     }
 
-    fun resumeFromTracking(track: com.blissless.oni.data.MangaTrack, onReady: () -> Unit) {
-        val mangaId = extractUniqueMangaId(track.mangaId, track.mangaUrl)
-        currentMangaId = mangaId
+    fun resumeFromTracking(track: MangaTrack, onReady: () -> Unit) {
+        val mediaId = track.anilistMediaId ?: extractAnilistMediaId(track.mangaId)
+        if (mediaId == null) {
+            log("ERROR", "No AniList media ID for resume")
+            _isLoading.value = false
+            return
+        }
+        currentMediaId = mediaId
+        currentMangaId = track.mangaId
         currentMangaTitle = track.title
         currentMangaCoverUrl = track.coverUrl
         currentMangaUrl = track.mangaUrl
@@ -462,55 +563,46 @@ class MainViewModel(private val context: Context) : ViewModel() {
         _resumeScrollProgress.value = track.scrollProgress
 
         viewModelScope.launch {
-            val detailResult = repository.getMangaDetails(track.mangaUrl)
+            val detailResult = anilistManager.getMediaDetail(mediaId)
             detailResult.fold(
                 onSuccess = { mangaDetail ->
-                    currentMangaCoverUrl = track.coverUrl ?: mangaDetail.coverUrl ?: currentMangaCoverUrl
-                    _mangaDetail.value = mangaDetail.copy(coverUrl = currentMangaCoverUrl)
+                    currentMangaCoverUrl = mangaDetail.coverExtraLarge ?: mangaDetail.coverLarge ?: track.coverUrl
+                    _mangaDetail.value = mangaDetail
                 },
                 onFailure = {
                     log("ERROR", "Failed to load detail: ${it.message}")
                 }
             )
 
-            val result = repository.getChapters(track.mangaUrl)
-            result.fold(
-                onSuccess = { chapterData ->
-                    val chapterList = chapterData.chapters
-                    _chapters.value = chapterList
-                    val totalChapters = countWholeChapters(chapterList)
-                    trackingManager.updateTotalChapters(mangaId, totalChapters)
+            val totalChapters = resolveChapterCount(mediaId)
+            val chapterList = generateChapterList(mediaId, totalChapters)
+            _chapters.value = chapterList
+            trackingManager.updateTotalChapters(track.mangaId, totalChapters)
 
-                    // The chapter to resume is the one after the last completed
-                    val safeIndex = (track.currentChapterIndex + 1).coerceIn(0, chapterList.lastIndex.coerceAtLeast(0))
-                    val chapter = chapterList.getOrNull(safeIndex)
-                    if (chapter != null) {
-                        _selectedChapterIndex.value = safeIndex
-                        _isChapterRead.value = false
-                        _isLoading.value = true
-                        loadChapterImages(chapter.url)
-                        onReady()
-                    }
-                },
-                onFailure = {
-                    log("ERROR", "Failed to load chapters: ${it.message}")
-                    _isLoading.value = false
-                }
-            )
+            val safeIndex = (track.currentChapterIndex + 1).coerceIn(0, chapterList.lastIndex.coerceAtLeast(0))
+            val chapter = chapterList.getOrNull(safeIndex)
+            if (chapter != null) {
+                _selectedChapterIndex.value = safeIndex
+                _isChapterRead.value = false
+                _isLoading.value = true
+                loadChapterImages(chapter.url)
+                onReady()
+            }
         }
     }
 
     fun continueFromCurrentManga(onReady: () -> Unit) {
         val mangaDetail = _mangaDetail.value ?: return
-        val mangaUrl = currentMangaUrl ?: return
+        val mediaId = currentMediaId ?: return
         val mangaId = currentMangaId ?: return
+        val mangaUrl = currentMangaUrl ?: return
 
         _selectedChapterIndex.value = -1
         _isLoading.value = true
         _chapterImages.value = UiState.Idle
-        
+
         val tracking = trackingManager.getMangaTracking(mangaId)
-        val savedIndex = if (tracking?.status == com.blissless.oni.data.ReadingStatus.READING) {
+        val savedIndex = if (tracking?.status == ReadingStatus.READING) {
             tracking.currentChapterIndex
         } else {
             0
@@ -522,7 +614,7 @@ class MainViewModel(private val context: Context) : ViewModel() {
             val safeChapterIndex = nextChapterIndex.coerceIn(0, chapterList.lastIndex.coerceAtLeast(0))
             _readChapterIndices.value = (0 until safeChapterIndex).toSet()
             _nextChapterToRead.value = safeChapterIndex
-            
+
             val chapter = chapterList.getOrNull(safeChapterIndex)
             if (chapter != null) {
                 _selectedChapterIndex.value = safeChapterIndex
@@ -533,46 +625,138 @@ class MainViewModel(private val context: Context) : ViewModel() {
             _isLoading.value = false
             return
         }
-        
+
         viewModelScope.launch {
-            val result = repository.getChapters(mangaUrl)
-            result.fold(
-                onSuccess = { chapterData ->
-                    val chapterList = chapterData.chapters
-                    _chapters.value = chapterList
-                    
-                    val safeChapterIndex = nextChapterIndex.coerceIn(0, chapterList.lastIndex.coerceAtLeast(0))
-                    
-                    _readChapterIndices.value = (0 until safeChapterIndex).toSet()
-                    _nextChapterToRead.value = safeChapterIndex
-                    
-                    val chapter = chapterList.getOrNull(safeChapterIndex)
-                    if (chapter != null) {
-                        _selectedChapterIndex.value = safeChapterIndex
-                        _isChapterRead.value = safeChapterIndex > 0
-                        loadChapterImages(chapter.url)
-                        onReady()
-                    }
-                },
-                onFailure = {
-                    log("ERROR", "Failed to load chapters: ${it.message}")
-                    _isLoading.value = false
-                }
-            )
+            val totalChapters = resolveChapterCount(mediaId)
+            val chapters = generateChapterList(mediaId, totalChapters)
+            _chapters.value = chapters
+
+            val safeChapterIndex = nextChapterIndex.coerceIn(0, chapters.lastIndex.coerceAtLeast(0))
+            _readChapterIndices.value = (0 until safeChapterIndex).toSet()
+            _nextChapterToRead.value = safeChapterIndex
+
+            val chapter = chapters.getOrNull(safeChapterIndex)
+            if (chapter != null) {
+                _selectedChapterIndex.value = safeChapterIndex
+                _isChapterRead.value = safeChapterIndex > 0
+                loadChapterImages(chapter.url)
+                onReady()
+            }
         }
     }
-    
+
+    fun startReading() {
+        _mangaDetail.value?.let { detail ->
+            val mediaId = currentMediaId ?: return
+            val mangaId = "anilist_$mediaId"
+            currentMangaId = mangaId
+            currentMangaTitle = detail.titleRomaji
+            currentMangaCoverUrl = detail.coverExtraLarge ?: detail.coverLarge
+
+            val existingTracking = trackingManager.getMangaTracking(mangaId)
+            val savedIndex = if (existingTracking?.status == ReadingStatus.READING &&
+                existingTracking.currentChapterIndex > 0) {
+                existingTracking.currentChapterIndex
+            } else {
+                0
+            }
+
+            _readChapterIndices.value = emptySet()
+            _nextChapterToRead.value = 0
+            _selectedChapterIndex.value = 0
+            _isLoading.value = true
+
+            addToReading(mangaId, detail.titleRomaji, currentMangaCoverUrl, currentMangaUrl ?: "https://anilist.co/manga/$mediaId", detail.chapters ?: 0, resetProgress = true)
+            generateAndLoadChapters(mediaId)
+        }
+    }
+
+    private fun generateAndLoadChapters(mediaId: Int) {
+        viewModelScope.launch {
+            _isLoading.value = true
+            _selectedChapterIndex.value = -1
+            _chapterImages.value = UiState.Idle
+
+            val mangaId = currentMangaId
+            val totalChapters = resolveChapterCount(mediaId)
+            val chapterList = generateChapterList(mediaId, totalChapters)
+            _chapters.value = chapterList
+
+            mangaId?.let {
+                trackingManager.updateTotalChapters(it, totalChapters)
+                refreshTrackingLists()
+            }
+
+            _isLoading.value = false
+
+            val savedIndex = _selectedChapterIndex.value
+            if (savedIndex > 0 && savedIndex < chapterList.size) {
+                selectChapter(savedIndex)
+            } else if (savedIndex == 0) {
+                selectChapter(0)
+            }
+        }
+    }
+
+    // ======================== Chapter Selection & Reading ========================
+
+    private fun selectChapterFromIndex(index: Int) {
+        _selectedChapterIndex.value = index
+        _isChapterRead.value = false
+        _isLoading.value = true
+        val chapter = _chapters.value.getOrNull(index)
+        currentMangaId?.let { mangaId ->
+            val tracking = trackingManager.getMangaTracking(mangaId)
+            if (tracking != null && index < tracking.currentChapterIndex) {
+                _isChapterRead.value = true
+            }
+        }
+        if (chapter != null) {
+            loadChapterImages(chapter.url)
+        }
+    }
+
+    fun selectChapter(index: Int) {
+        if (index >= 0 && index < _chapters.value.size) {
+            selectChapterFromIndex(index)
+        }
+    }
+
+    fun showChapterList() {
+        _selectedChapterIndex.value = -1
+        _chapterImages.value = UiState.Idle
+        _isLoading.value = false
+    }
+
+    fun showChapterListOnly() {
+        _selectedChapterIndex.value = -1
+        _chapterImages.value = UiState.Idle
+        if (_chapters.value.isEmpty()) {
+            val mediaId = currentMediaId
+            if (mediaId == null) {
+                _isLoading.value = false
+                return
+            }
+            _isLoading.value = true
+            generateAndLoadChapters(mediaId)
+        } else {
+            _isLoading.value = false
+        }
+    }
+
+    // ======================== Scroll Progress & Tracking ========================
+
     fun onChapterScrollProgress(scrollPercent: Float) {
         val threshold = _anilistSyncThreshold.value / 100f
         if (_selectedChapterIndex.value < 0) return
-        
+        if (!scrollPercent.isFinite()) return
+
         currentMangaId?.let { mangaId ->
             val chapter = _chapters.value.getOrNull(_selectedChapterIndex.value)
             if (chapter != null) {
-                val chapterNumber = extractMainChapterNumber(chapter.title ?: "")
+                val chapterNumber = _selectedChapterIndex.value + 1
                 val existing = trackingManager.getMangaTracking(mangaId)
-                
-                // Create tracking entry if none exists (any scroll level)
+
                 if (existing == null) {
                     val track = MangaTrack(
                         mangaId = mangaId,
@@ -581,48 +765,48 @@ class MainViewModel(private val context: Context) : ViewModel() {
                         currentChapterIndex = _selectedChapterIndex.value,
                         currentChapterNumber = chapterNumber,
                         currentChapterUrl = chapter.url,
-                        totalChapters = countWholeChapters(_chapters.value),
+                        totalChapters = _chapters.value.size,
                         status = ReadingStatus.READING,
                         lastReadTimestamp = System.currentTimeMillis(),
-                        mangaUrl = currentMangaUrl ?: "https://atsu.moe/manga/$mangaId",
-                        scrollProgress = scrollPercent
+                        mangaUrl = currentMangaUrl ?: "https://anilist.co/manga/${currentMediaId ?: ""}",
+                        scrollProgress = scrollPercent,
+                        anilistMediaId = currentMediaId
                     )
                     trackingManager.updateTracking(track)
                     log("TRACK", "Created tracking for chapter ${_selectedChapterIndex.value} at $scrollPercent")
                 } else {
-                    // Always save scroll progress (no tracking advancement until threshold)
                     trackingManager.updateScrollProgress(mangaId, scrollPercent)
                 }
-                
-                refreshTrackingLists()
-                
-                // Mark chapter as read when threshold is passed
+
                 if (scrollPercent >= threshold) {
                     val trackForUpdate = trackingManager.getMangaTracking(mangaId)
-                    if (trackForUpdate == null || trackForUpdate.currentChapterIndex != _selectedChapterIndex.value || trackForUpdate.currentChapterNumber == 0) {
+                    if (trackForUpdate == null || trackForUpdate.currentChapterIndex != _selectedChapterIndex.value || trackForUpdate.currentChapterNumber < 0) {
                         trackingManager.updateChapterProgress(mangaId, _selectedChapterIndex.value, chapterNumber, chapter.url)
                         log("TRACK", "Updated to chapter ${_selectedChapterIndex.value}")
+                    } else {
+                        trackingManager.resetScrollProgress(mangaId)
                     }
                     _isChapterRead.value = true
                     _readChapterIndices.value = _readChapterIndices.value + _selectedChapterIndex.value
                     _nextChapterToRead.value = _selectedChapterIndex.value + 1
-                    
-                    // Debounced AniList update
+
                     val tracking = trackingManager.getMangaTracking(mangaId)
                     if (tracking != null) {
                         scheduleAnilistProgressUpdate(tracking)
                     }
                 }
+
+                refreshTrackingLists()
             }
         }
     }
-    
+
     fun updateCurrentChapter() {
         currentMangaId?.let { mangaId ->
             val chapter = _chapters.value.getOrNull(_selectedChapterIndex.value)
             if (chapter != null) {
+                val chapterNumber = _selectedChapterIndex.value + 1
                 val existing = trackingManager.getMangaTracking(mangaId)
-                val chapterNumber = extractMainChapterNumber(chapter.title ?: "")
                 if (existing == null) {
                     val track = MangaTrack(
                         mangaId = mangaId,
@@ -631,13 +815,14 @@ class MainViewModel(private val context: Context) : ViewModel() {
                         currentChapterIndex = _selectedChapterIndex.value,
                         currentChapterNumber = chapterNumber,
                         currentChapterUrl = chapter.url,
-                        totalChapters = countWholeChapters(_chapters.value),
+                        totalChapters = _chapters.value.size,
                         status = ReadingStatus.READING,
                         lastReadTimestamp = System.currentTimeMillis(),
-                        mangaUrl = currentMangaUrl ?: "https://atsu.moe/manga/$mangaId"
+                        mangaUrl = currentMangaUrl ?: "https://anilist.co/manga/${currentMediaId ?: ""}",
+                        anilistMediaId = currentMediaId
                     )
                     trackingManager.updateTracking(track)
-                } else if (existing.currentChapterIndex != _selectedChapterIndex.value || existing.currentChapterNumber == 0) {
+                } else if (existing.currentChapterIndex != _selectedChapterIndex.value || existing.currentChapterNumber < 0) {
                     trackingManager.updateChapterProgress(mangaId, _selectedChapterIndex.value, chapterNumber, chapter.url)
                 }
                 refreshTrackingLists()
@@ -654,7 +839,13 @@ class MainViewModel(private val context: Context) : ViewModel() {
     }
 
     private fun updateAnilistProgressNow(track: MangaTrack) {
-        val mediaId = track.anilistMediaId ?: extractAnilistMediaId(track.mangaId) ?: return
+        var mediaId = track.anilistMediaId ?: extractAnilistMediaId(track.mangaId)
+        if (mediaId == null && track.mangaUrl.isNotBlank()) {
+            mediaId = anilistManager.getSyncedManga()
+                .firstOrNull { it.localMangaUrl == track.mangaUrl || it.siteUrl == track.mangaUrl }
+                ?.mediaId
+        }
+        if (mediaId == null) return
         if (!anilistManager.isLoggedIn()) return
         val anilistStatus = when (track.status) {
             ReadingStatus.READING -> "CURRENT"
@@ -663,11 +854,12 @@ class MainViewModel(private val context: Context) : ViewModel() {
             ReadingStatus.ON_HOLD -> "PAUSED"
             ReadingStatus.DROPPED -> "DROPPED"
         }
+        val safeProgress = maxOf(track.currentChapterNumber, 0)
         viewModelScope.launch {
-            val result = anilistManager.updateMediaListEntry(mediaId, track.currentChapterNumber, anilistStatus)
+            val result = anilistManager.updateMediaListEntry(mediaId, safeProgress, anilistStatus)
             result.fold(
                 onSuccess = {
-                    Log.d("ANILIST", "Updated progress for media $mediaId to chapter ${track.currentChapterNumber}")
+                    Log.d("ANILIST", "Updated progress for media $mediaId to chapter $safeProgress")
                 },
                 onFailure = { e ->
                     Log.e("ANILIST", "Failed to update progress: ${e.message}")
@@ -682,6 +874,13 @@ class MainViewModel(private val context: Context) : ViewModel() {
             mangaId.substringAfter(prefix).toIntOrNull()
         } else null
     }
+
+    private fun extractMediaIdFromMangaId(mangaId: String?): Int? {
+        if (mangaId == null) return null
+        return extractAnilistMediaId(mangaId)
+    }
+
+    // ======================== Search ========================
 
     fun updateQuery(query: String) {
         _searchQuery.value = query
@@ -698,7 +897,7 @@ class MainViewModel(private val context: Context) : ViewModel() {
         }
 
         Log.d("SEARCH", "search() called with: '$query', last searched: '$lastSearchedQuery'")
-        
+
         if (query == lastSearchedQuery) {
             Log.d("SEARCH", "Same query as last, checking state...")
             if (_searchResults.value is UiState.Success) {
@@ -754,246 +953,30 @@ class MainViewModel(private val context: Context) : ViewModel() {
         }
     }
 
-    fun selectManga(manga: AniListSearchResult) {
-        log("SELECT", "Selected from AniList: ${manga.title} (id=${manga.id})")
-        val mangaId = "anilist_${manga.id}"
-        currentMangaId = mangaId
-        currentMangaTitle = manga.title
-        currentMangaCoverUrl = manga.coverUrl
-        currentMangaUrl = null
-        _mangaDetail.value = null
-        _isLoading.value = true
-
-        viewModelScope.launch {
-            val titleToTry = listOfNotNull(
-                manga.title,
-                manga.englishTitle,
-                manga.nativeTitle
-            ).firstOrNull { it.isNotBlank() } ?: manga.title
-
-            val matchResult = repository.search(titleToTry)
-            val matched = matchResult.getOrNull()?.firstOrNull { match ->
-                match.title.contains(manga.title, ignoreCase = true) ||
-                (manga.englishTitle != null && match.title.contains(manga.englishTitle, ignoreCase = true))
-            }
-
-            if (matched != null) {
-                log("SELECT", "Matched to source manga: ${matched.title}, url: ${matched.url}")
-                currentMangaUrl = matched.url
-                currentMangaCoverUrl = matched.coverUrl ?: manga.coverUrl
-                val resolvedMangaId = matched.mangaId ?: extractUniqueMangaId(
-                    matched.url.substringAfter("/manga/").substringBefore("?"),
-                    matched.url
-                )
-                currentMangaId = resolvedMangaId
-                loadMangaDetails(matched.url, currentMangaCoverUrl)
-                loadReadChapters(resolvedMangaId)
-            } else {
-                log("WARN", "No atsu.moe match found for '${manga.title}', using AniList data")
-                currentMangaId = mangaId
-                currentMangaTitle = manga.title
-                currentMangaCoverUrl = manga.coverUrl
-                currentMangaUrl = "https://anilist.co/manga/${manga.id}"
-                val description = manga.description?.let { stripHtml(it) } ?: ""
-                _mangaDetail.value = com.blissless.oni.data.MangaDetail(
-                    id = mangaId,
-                    title = manga.title,
-                    englishTitle = manga.englishTitle,
-                    synopsis = description,
-                    coverUrl = manga.coverUrl,
-                    bannerUrl = null,
-                    genres = manga.genres ?: emptyList(),
-                    status = manga.status?.let { formatStatus(it) } ?: "",
-                    type = manga.format ?: "",
-                    avgRating = (manga.meanScore ?: 0).toDouble() / 10.0,
-                    totalChapterCount = manga.chapters ?: 0,
-                    otherNames = listOfNotNull(manga.nativeTitle, manga.englishTitle).filter { it != manga.title },
-                    authors = emptyList()
-                )
-                _chapters.value = emptyList()
-                _isLoading.value = false
-                refreshTrackingLists()
-            }
-        }
-    }
-
-    fun selectManga(manga: MangaSearchResult) {
-        log("SELECT", "Selected: ${manga.title}, url: ${manga.url}")
-        val mangaId = manga.mangaId ?: extractUniqueMangaId(
-            manga.url.substringAfter("/manga/").substringBefore("?"),
-            manga.url
-        )
-        currentMangaId = mangaId
-        currentMangaTitle = manga.title
-        currentMangaCoverUrl = manga.coverUrl
-        currentMangaUrl = manga.url
-        loadMangaDetails(manga.url, manga.coverUrl)
-        loadReadChapters(mangaId)
-    }
-
-    private fun extractUniqueMangaId(baseId: String, mangaUrl: String): String {
-        val params = mangaUrl.substringAfter("?").split("&").filter { it.isNotBlank() }
-        val versionParams = params.filter { it.startsWith("colored") || it.startsWith("uncolored") || it.startsWith("ver") }
-        return if (versionParams.isNotEmpty()) {
-            "$baseId?${versionParams.joinToString("&")}"
-        } else {
-            baseId
-        }
-    }
-
-    private fun loadReadChapters(mangaId: String) {
-        Log.d("LOAD", "loadReadChapters for: $mangaId")
+    fun loadReadChapters(mangaId: String) {
         val tracking = trackingManager.getMangaTracking(mangaId)
         if (tracking != null) {
-            Log.d("LOAD", "Found tracking: chapterIndex=${tracking.currentChapterIndex}")
             _readChapterIndices.value = (0..tracking.currentChapterIndex).toSet()
             _nextChapterToRead.value = tracking.currentChapterIndex + 1
         } else {
-            Log.d("LOAD", "No tracking found - resetting")
             _readChapterIndices.value = emptySet()
             _nextChapterToRead.value = 0
         }
     }
 
-    fun startReading() {
-        _mangaDetail.value?.let { detail ->
-            val baseMangaId = detail.id
-            val mangaId = extractUniqueMangaId(baseMangaId, currentMangaUrl ?: "")
-            currentMangaId = mangaId
-            currentMangaTitle = detail.title
-            currentMangaCoverUrl = detail.coverUrl
-            val mangaUrl = currentMangaUrl ?: "https://atsu.moe/manga/$baseMangaId"
-            
-            // Check for saved progress - only if in READING status and valid
-            val existingTracking = trackingManager.getMangaTracking(mangaId)
-            val savedIndex = if (existingTracking?.status == com.blissless.oni.data.ReadingStatus.READING && 
-                existingTracking.currentChapterIndex > 0) {
-                existingTracking.currentChapterIndex
-            } else {
-                0
-            }
-            
-            // Start new - always reset to beginning when pressing Start Reading
-            _readChapterIndices.value = emptySet()
-            _nextChapterToRead.value = 0
-            _selectedChapterIndex.value = 0
-            Log.d("START", "Starting fresh at chapter 0 (savedIndex was $savedIndex)")
-            
-            _isLoading.value = true  // Show loading screen
-            
-            addToReading(mangaId, detail.title, detail.coverUrl, mangaUrl, detail.totalChapterCount, resetProgress = true)
-            loadChapters(mangaUrl)
-        }
+    fun clearSearch() {
+        _searchQuery.value = ""
+        _searchResults.value = UiState.Idle
+        lastSearchedQuery = ""
     }
 
-    private fun loadMangaDetails(mangaUrl: String, searchCoverUrl: String?) {
-        viewModelScope.launch {
-            _isLoading.value = true
-            _mangaDetail.value = null
-            
-            // Load both detail and chapters in parallel, use chapters to get correct total
-            val detailDeferred = async { repository.getMangaDetails(mangaUrl) }
-            val chaptersDeferred = async { repository.getChapters(mangaUrl) }
-            
-            detailDeferred.await().fold(
-                onSuccess = { mangaDetail ->
-                    val effectiveCover = searchCoverUrl ?: currentMangaCoverUrl ?: mangaDetail.coverUrl?.takeIf { it.isNotBlank() }
-                    val detailWithCover = mangaDetail.copy(
-                        coverUrl = effectiveCover
-                    )
-                    _mangaDetail.value = detailWithCover
-                    log("DETAILS", "Loaded: ${mangaDetail.title}, raw chapters: ${mangaDetail.totalChapterCount}")
-                },
-                onFailure = {
-                    log("ERROR", "Failed: ${it.message}")
-                }
-            )
-            
-            // Now update with real chapter count (excluding decimal sub-chapters)
-            chaptersDeferred.await().fold(
-                onSuccess = { chapterData ->
-                    val total = countWholeChapters(chapterData.chapters)
-                    _mangaDetail.value?.let { detail ->
-                        _mangaDetail.value = detail.copy(totalChapterCount = total)
-                    }
-                    Log.d("DETAILS", "Updated chapter count to: $total")
-                },
-                onFailure = { }
-            )
-            
-            _isLoading.value = false
-        }
+    fun clearSelection() {
+        _chapters.value = emptyList()
+        _selectedChapterIndex.value = -1
+        _chapterImages.value = UiState.Idle
     }
 
-    private fun loadChapters(mangaUrl: String) {
-        viewModelScope.launch {
-            _isLoading.value = true
-            _selectedChapterIndex.value = -1
-            _chapterImages.value = UiState.Idle
-            Log.d("CHAPTERS", "Loading chapters for: $mangaUrl")
-            val result = repository.getChapters(mangaUrl)
-            result.fold(
-                onSuccess = { chapterData ->
-                    val chapterList = chapterData.chapters
-                    _chapters.value = chapterList
-                    
-                    // Count only whole chapters (exclude decimal sub-chapters like 1.1, 1.2)
-                    val totalChapters = countWholeChapters(chapterList)
-                    Log.d("CHAPTERS", "Loaded ${chapterList.size} items, whole chapters: $totalChapters")
-                    val baseMangaId = mangaUrl.substringAfter("/manga/").substringBefore("?")
-                    val uniqueMangaId = extractUniqueMangaId(baseMangaId, mangaUrl)
-                    Log.d("CHAPTERS", "Using mangaId: $uniqueMangaId")
-                    Log.d("CHAPTERS", "Total chapters: $totalChapters")
-                    
-                    // Update detail with correct count
-                    _mangaDetail.value?.let { detail ->
-                        _mangaDetail.value = detail.copy(
-                            totalChapterCount = totalChapters,
-                            synopsis = "${detail.synopsis}\n\nOriginal: Dragon Ball (${chapterData.dbChapters}) | Dragon Ball Z (${chapterData.dbzChapters})"
-                        )
-                    }
-                    
-                    trackingManager.updateTotalChapters(uniqueMangaId, totalChapters)
-                    refreshTrackingLists()
-                    
-                    // Use the index that was set in startReading/continue
-                    val savedIndex = _selectedChapterIndex.value
-                    
-                    if (savedIndex > 0 && savedIndex < chapterList.size) {
-                        Log.d("CHAPTERS", "Loading chapter: $savedIndex")
-                        selectChapter(savedIndex)
-                    } else if (savedIndex == 0) {
-                        // Start from beginning (chapter 0)
-                        Log.d("CHAPTERS", "Starting from chapter 0")
-                        selectChapter(0)
-                    }
-                    // If -1, stay on chapter list
-                },
-                onFailure = {
-                    Log.d("ERROR", "Failed: ${it.message}")
-                }
-            )
-            _isLoading.value = false
-        }
-    }
-
-    fun selectChapter(index: Int) {
-        if (index >= 0 && index < _chapters.value.size) {
-            _selectedChapterIndex.value = index
-            _isChapterRead.value = false
-            _isLoading.value = true
-            val chapter = _chapters.value[index]
-            currentMangaId?.let { mangaId ->
-                val tracking = trackingManager.getMangaTracking(mangaId)
-                if (tracking != null && index < tracking.currentChapterIndex) {
-                    _isChapterRead.value = true
-                }
-            }
-            log("SELECT", "Selected chapter $index: ${chapter.url}")
-            
-            loadChapterImages(chapter.url)
-        }
-    }
+    // ======================== Image Loading (Extensions) ========================
 
     private fun fetchImagesFromExtension(
         mangaTitle: String,
@@ -1050,10 +1033,10 @@ class MainViewModel(private val context: Context) : ViewModel() {
             if (authority != null) {
                 val chapter = _chapters.value.getOrNull(_selectedChapterIndex.value)
                 val title = chapter?.title ?: ""
-                val chapterParam = extractChapterNumberString(title)
+                val chapterParam = title.removePrefix("Chapter ").trim()
                 val mangaTitle = currentMangaTitle
-                    ?: _mangaDetail.value?.englishTitle
-                    ?: _mangaDetail.value?.title
+                    ?: _mangaDetail.value?.titleEnglish
+                    ?: _mangaDetail.value?.titleRomaji
                     ?: ""
                 if (mangaTitle.isNotBlank() && chapterParam.isNotBlank()) {
                     log("LOAD", "Fetching: title='$title' -> chapterParam='$chapterParam' mangaTitle='$mangaTitle'")
@@ -1082,68 +1065,18 @@ class MainViewModel(private val context: Context) : ViewModel() {
     fun goToNext() {
         val current = _selectedChapterIndex.value
         if (current < _chapters.value.size - 1) {
-            selectChapter(current + 1)
+            selectChapterFromIndex(current + 1)
         }
     }
 
     fun goToPrevious() {
         val current = _selectedChapterIndex.value
         if (current > 0) {
-            selectChapter(current - 1)
+            selectChapterFromIndex(current - 1)
         }
     }
 
-    fun clearSearch() {
-        _searchQuery.value = ""
-        _searchResults.value = UiState.Idle
-        lastSearchedQuery = ""
-    }
-
-    fun clearSelection() {
-        _chapters.value = emptyList()
-        _selectedChapterIndex.value = -1
-        _chapterImages.value = UiState.Idle
-    }
-    
-    fun showChapterList() {
-        // Just show chapter list without auto-selecting
-        _selectedChapterIndex.value = -1
-        _chapterImages.value = UiState.Idle
-        _isLoading.value = false
-    }
-    
-    fun showChapterListOnly() {
-        // Show chapter list without loading any chapter - but ensure chapters are loaded
-        _selectedChapterIndex.value = -1
-        _chapterImages.value = UiState.Idle
-        
-        // If chapters not loaded, load them
-        if (_chapters.value.isEmpty()) {
-            Log.d("CHAPTERS", "Chapters not loaded, loading for chapter list")
-            currentMangaUrl?.let { url ->
-                _isLoading.value = true
-                loadChaptersForList()
-            }
-        } else {
-            _isLoading.value = false
-        }
-    }
-    
-    private fun loadChaptersForList() {
-        viewModelScope.launch {
-            val result = repository.getChapters(currentMangaUrl!!)
-            result.fold(
-                onSuccess = { chapterData ->
-                    _chapters.value = chapterData.chapters
-                    _isLoading.value = false
-                    Log.d("CHAPTERS", "Loaded ${chapterData.chapters.size} chapters for list")
-                },
-                onFailure = { 
-                    _isLoading.value = false
-                }
-            )
-        }
-    }
+    // ======================== AniList Auth & Sync ========================
 
     fun getAnilistAuthUrl(): String = anilistManager.getAuthUrl()
 
@@ -1182,18 +1115,11 @@ class MainViewModel(private val context: Context) : ViewModel() {
                 },
                 onFailure = { Log.e("ANILIST", "Sync failed: ${it.message}") }
             )
-            // Match and create tracking entries outside fold to allow suspend calls
             val entries = anilistManager.getSyncedManga()
             val matched = mutableListOf<com.blissless.oni.data.AniListMangaEntry>()
             for (entry in entries) {
                 if (entry.status in setOf("CURRENT", "PLANNING", "REPEATING")) {
-                    if (entry.localMangaUrl == null) {
-                        matched.add(matchWithSearch(entry))
-                    } else if (entry.chapters == null) {
-                        matched.add(fillMissingChapters(entry))
-                    } else {
-                        matched.add(entry)
-                    }
+                    matched.add(entry)
                 } else {
                     matched.add(entry)
                 }
@@ -1251,13 +1177,7 @@ class MainViewModel(private val context: Context) : ViewModel() {
                     matched.add(entry)
                 } else {
                     if (entry.status in setOf("CURRENT", "PLANNING", "REPEATING")) {
-                        if (entry.localMangaUrl == null) {
-                            matched.add(matchWithSearch(entry))
-                        } else if (entry.chapters == null) {
-                            matched.add(fillMissingChapters(entry))
-                        } else {
-                            matched.add(entry)
-                        }
+                        matched.add(entry)
                     } else {
                         matched.add(entry)
                     }
@@ -1268,59 +1188,6 @@ class MainViewModel(private val context: Context) : ViewModel() {
             _anilistUsername.value = anilistManager.getLoggedInUser()
             _isAniListSyncing.value = false
         }
-    }
-
-    private suspend fun matchWithSearch(entry: com.blissless.oni.data.AniListMangaEntry): com.blissless.oni.data.AniListMangaEntry {
-        val titlesToTry = listOfNotNull(entry.englishTitle, entry.title, entry.nativeTitle)
-        for (title in titlesToTry) {
-            try {
-                val result = repository.search(title)
-                result.getOrNull()?.let { results ->
-                    val match = results.firstOrNull { r ->
-                        r.title.equals(entry.title, ignoreCase = true) ||
-                        r.title.equals(entry.englishTitle, ignoreCase = true) ||
-                        entry.title.equals(r.title, ignoreCase = true)
-                    }
-                    if (match != null) {
-                        var matchedEntry = entry.copy(localMangaUrl = match.url)
-                        if (matchedEntry.chapters == null) {
-                            val chaptersResult = repository.getChapters(match.url)
-                            chaptersResult.fold(
-                                onSuccess = { chapterData ->
-                                    val total = countWholeChapters(chapterData.chapters)
-                                    if (total > 0) {
-                                        matchedEntry = matchedEntry.copy(chapters = total)
-                                    }
-                                },
-                                onFailure = { }
-                            )
-                        }
-                        anilistManager.updateSyncedMangaEntry(matchedEntry)
-                        return matchedEntry
-                    }
-                }
-            } catch (e: Exception) {
-                Log.e("ANILIST", "Search failed for ${entry.title}: ${e.message}")
-            }
-        }
-        return entry
-    }
-
-    private suspend fun fillMissingChapters(entry: com.blissless.oni.data.AniListMangaEntry): com.blissless.oni.data.AniListMangaEntry {
-        val url = entry.localMangaUrl ?: return entry
-        val chaptersResult = repository.getChapters(url)
-        chaptersResult.fold(
-            onSuccess = { chapterData ->
-                val total = countWholeChapters(chapterData.chapters)
-                if (total > 0) {
-                    val updated = entry.copy(chapters = total)
-                    anilistManager.updateSyncedMangaEntry(updated)
-                    return updated
-                }
-            },
-            onFailure = { }
-        )
-        return entry
     }
 
     fun getAnilistUsername(): String? = anilistManager.getLoggedInUser()
@@ -1345,10 +1212,11 @@ class MainViewModel(private val context: Context) : ViewModel() {
         }
     }
 
+    // ======================== Manual Progress & Settings ========================
+
     fun setManualChapterProgress(chapterNumber: Int) {
         val mangaId = currentMangaId ?: return
-        val totalChs = countWholeChapters(_chapters.value)
-            .coerceAtLeast(_mangaDetail.value?.totalChapterCount ?: 0)
+        val totalChs = _chapters.value.size.coerceAtLeast(_mangaDetail.value?.chapters ?: 0)
             .let { if (it <= 0) Int.MAX_VALUE else it }
         val clamped = chapterNumber.coerceAtMost(totalChs)
         val existing = trackingManager.getMangaTracking(mangaId)
@@ -1361,20 +1229,20 @@ class MainViewModel(private val context: Context) : ViewModel() {
                 status = ReadingStatus.READING
             )
             trackingManager.updateTracking(updated)
-            // Send to AniList immediately (no debounce for manual input)
             updateAnilistProgressNow(updated)
         } else {
             val track = MangaTrack(
                 mangaId = mangaId,
-                title = currentMangaTitle ?: (_mangaDetail.value?.title ?: ""),
+                title = currentMangaTitle ?: (_mangaDetail.value?.titleRomaji ?: ""),
                 coverUrl = currentMangaCoverUrl,
                 currentChapterIndex = chapterIndex,
                 currentChapterNumber = clamped,
                 currentChapterUrl = "",
-                totalChapters = countWholeChapters(_chapters.value).coerceAtLeast(_mangaDetail.value?.totalChapterCount ?: 0),
+                totalChapters = _chapters.value.size.coerceAtLeast(_mangaDetail.value?.chapters ?: 0),
                 status = ReadingStatus.READING,
                 lastReadTimestamp = System.currentTimeMillis(),
-                mangaUrl = currentMangaUrl ?: "https://atsu.moe/manga/$mangaId"
+                mangaUrl = currentMangaUrl ?: "https://anilist.co/manga/${currentMediaId ?: ""}",
+                anilistMediaId = currentMediaId
             )
             trackingManager.updateTracking(track)
             updateAnilistProgressNow(track)
@@ -1407,15 +1275,6 @@ class MainViewModel(private val context: Context) : ViewModel() {
             @Suppress("DEPRECATION")
             Html.fromHtml(html).toString()
         }
-    }
-
-    private fun formatStatus(status: String): String = when (status.uppercase()) {
-        "RELEASING" -> "Ongoing"
-        "FINISHED" -> "Completed"
-        "NOT_YET_RELEASED" -> "Not Released"
-        "CANCELLED" -> "Cancelled"
-        "HIATUS" -> "On Hiatus"
-        else -> status
     }
 
 }

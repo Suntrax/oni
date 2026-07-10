@@ -8,7 +8,7 @@
 
 - **AniList Sync** - Sync your progress and list with AniList
 - **Auto-sync** - Automatically push progress at a configurable scroll threshold (75-100%)
-- **Search** - Find manga from atsu.moe
+- **Search** - Find manga via AniList with advanced filters
 - **Reader** - Read chapters with image preloading
 - **Progress Tracking** - Continue where you left off
 - **Explore** - Browse featured and categorized manga
@@ -28,7 +28,7 @@ Download the APK from [Releases](https://github.com/Suntrax/oni/releases) and in
 - Kotlin + Jetpack Compose
 - Coil for image loading
 - Extension-based image loading (third-party content providers)
-- atsu.moe API (manga discovery & chapter lists)
+- AniList GraphQL API (manga discovery, details, categories, & user sync)
 - MVVM Architecture
 
 ## Disclaimer

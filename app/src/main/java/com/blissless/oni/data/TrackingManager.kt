@@ -68,8 +68,9 @@ class TrackingManager(context: Context) {
 
     fun updateScrollProgress(mangaId: String, scrollProgress: Float) {
         val existing = getMangaTracking(mangaId) ?: return
+        val safeProgress = if (scrollProgress.isFinite()) scrollProgress else 0f
         val updated = existing.copy(
-            scrollProgress = scrollProgress,
+            scrollProgress = safeProgress,
             lastReadTimestamp = System.currentTimeMillis()
         )
         updateTracking(updated)
@@ -81,7 +82,7 @@ class TrackingManager(context: Context) {
             val updated = existing.copy(
                 status = ReadingStatus.READING,
                 lastReadTimestamp = System.currentTimeMillis(),
-                currentChapterNumber = if (resetProgress) 0 else existing.currentChapterNumber,
+                currentChapterNumber = if (resetProgress) -1 else existing.currentChapterNumber,
                 currentChapterIndex = if (resetProgress) 0 else existing.currentChapterIndex,
                 currentChapterUrl = if (resetProgress) "" else existing.currentChapterUrl,
                 totalChapters = totalChapters
@@ -147,6 +148,7 @@ class TrackingManager(context: Context) {
                 title = title,
                 coverUrl = coverUrl,
                 currentChapterIndex = 0,
+                currentChapterNumber = 0,
                 currentChapterUrl = "",
                 totalChapters = totalChapters,
                 status = ReadingStatus.PLANNING,
@@ -198,7 +200,10 @@ class TrackingManager(context: Context) {
     }
     
     private fun saveAll(tracks: List<MangaTrack>) {
-        val json = gson.toJson(tracks)
+        val safeTracks = tracks.map { track ->
+            if (!track.scrollProgress.isFinite()) track.copy(scrollProgress = 0f) else track
+        }
+        val json = gson.toJson(safeTracks)
         prefs.edit().putString(KEY_TRACKING, json).apply()
     }
 }

@@ -210,7 +210,7 @@ fun ResumeTrackCard(
                     verticalAlignment = Alignment.CenterVertically
                 ) {
                     Text(
-                        text = "Ch. ${if (track.currentChapterNumber > 0) track.currentChapterNumber + 1 else track.currentChapterIndex + 2}",
+                        text = "Ch. ${maxOf(track.currentChapterNumber, 0) + 1}",
                         style = MaterialTheme.typography.labelSmall,
                         color = BlueLight,
                         fontWeight = FontWeight.SemiBold,
@@ -300,9 +300,6 @@ fun HomeScreen(
                             mangaId = track.mangaId
                         )
                         onMangaSelected(manga)
-                    },
-                    onPlayClick = { track ->
-                        onContinueReading(track)
                     }
                 )
             }
@@ -314,15 +311,6 @@ fun HomeScreen(
                     title = "Planning to Read",
                     tracks = planningToRead,
                     onTrackClick = { track ->
-                        val manga = MangaSearchResult(
-                            title = track.title,
-                            url = track.mangaUrl,
-                            coverUrl = track.coverUrl,
-                            mangaId = track.mangaId
-                        )
-                        onMangaSelected(manga)
-                    },
-                    onPlayClick = { track ->
                         val manga = MangaSearchResult(
                             title = track.title,
                             url = track.mangaUrl,
@@ -359,7 +347,6 @@ fun TrackingSection(
     title: String,
     tracks: List<MangaTrack>,
     onTrackClick: (MangaTrack) -> Unit,
-    onPlayClick: (MangaTrack) -> Unit,
     onRemoveClick: ((MangaTrack) -> Unit)? = null
 ) {
     Column {
@@ -379,7 +366,6 @@ fun TrackingSection(
                 TrackingCard(
                     track = track,
                     onClick = { onTrackClick(track) },
-                    onPlayClick = { onPlayClick(track) },
                     onRemoveClick = onRemoveClick?.let { { it(track) } }
                 )
             }
@@ -391,7 +377,6 @@ fun TrackingSection(
 fun TrackingCard(
     track: MangaTrack,
     onClick: () -> Unit,
-    onPlayClick: () -> Unit,
     onRemoveClick: (() -> Unit)? = null
 ) {
     Card(
@@ -487,27 +472,12 @@ fun TrackingCard(
                 ) {
                     val displayTotal = if (track.totalChapters > 0) track.totalChapters.toString() else "?"
                     Text(
-                        text = "Ch. ${if (track.currentChapterNumber > 0) track.currentChapterNumber else track.currentChapterIndex + 1}/$displayTotal",
+                        text = "Ch. ${maxOf(track.currentChapterNumber, 0)}/$displayTotal",
                         style = MaterialTheme.typography.labelSmall,
                         color = BlueLight,
                         fontWeight = FontWeight.SemiBold,
                         letterSpacing = 0.3.sp
                     )
-                    Box(
-                        modifier = Modifier
-                            .size(32.dp)
-                            .clip(CircleShape)
-                            .background(BlueAccent.copy(alpha = 0.2f))
-                            .clickable(onClick = onPlayClick),
-                        contentAlignment = Alignment.Center
-                    ) {
-                        Icon(
-                            imageVector = Icons.Default.PlayArrow,
-                            contentDescription = "Continue",
-                            tint = BlueAccent,
-                            modifier = Modifier.size(18.dp)
-                        )
-            }
         }
     }
 }

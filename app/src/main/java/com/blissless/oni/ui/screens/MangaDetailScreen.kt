@@ -5,6 +5,8 @@ import androidx.compose.foundation.BorderStroke
 import androidx.compose.foundation.background
 import androidx.compose.foundation.border
 import androidx.compose.foundation.clickable
+import androidx.compose.animation.fadeIn
+import androidx.compose.animation.slideInVertically
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
@@ -29,6 +31,8 @@ import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.foundation.text.KeyboardOptions
 import androidx.compose.foundation.verticalScroll
+import androidx.compose.foundation.lazy.LazyRow
+import androidx.compose.foundation.lazy.items
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.automirrored.filled.ArrowBack
 import androidx.compose.material.icons.filled.ArrowDropDown
@@ -36,12 +40,19 @@ import androidx.compose.material.icons.filled.Book
 import androidx.compose.material.icons.filled.Bookmark
 import androidx.compose.material.icons.filled.BookmarkBorder
 import androidx.compose.material.icons.filled.CalendarMonth
+import androidx.compose.material.icons.filled.Close
 import androidx.compose.material.icons.filled.Check
 import androidx.compose.material.icons.filled.Edit
 import androidx.compose.material.icons.automirrored.filled.List
 import androidx.compose.material.icons.filled.People
 import androidx.compose.material.icons.filled.PlayArrow
 import androidx.compose.material.icons.filled.Star
+import androidx.compose.material.icons.filled.ThumbUp
+import androidx.compose.material.icons.filled.Link
+import androidx.compose.material.icons.filled.Info
+import androidx.compose.material.icons.filled.TrendingUp
+import androidx.compose.material.icons.filled.Favorite
+import androidx.compose.material.icons.filled.AutoAwesome
 import androidx.compose.material3.AlertDialog
 import androidx.compose.material3.Button
 import androidx.compose.material3.ButtonDefaults
@@ -76,6 +87,7 @@ import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
 import androidx.compose.ui.graphics.Brush
 import androidx.compose.ui.graphics.Color
+import androidx.compose.ui.graphics.vector.ImageVector
 import androidx.compose.ui.layout.ContentScale
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.input.KeyboardType
@@ -84,6 +96,13 @@ import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import coil.compose.AsyncImage
+import com.blissless.oni.data.AniListCharacterEntry
+import com.blissless.oni.data.AniListMangaDetail
+import com.blissless.oni.data.AniListRankingEntry
+import com.blissless.oni.data.AniListRelationEntry
+import com.blissless.oni.data.AniListSearchResult
+import com.blissless.oni.data.AniListStaffEntry
+import com.blissless.oni.data.AniListTag
 import com.blissless.oni.data.ReadingStatus
 import com.blissless.oni.ui.theme.BlueAccent
 import com.blissless.oni.ui.theme.BlueLight
@@ -94,6 +113,7 @@ import com.blissless.oni.ui.theme.DarkSurfaceVariant
 import com.blissless.oni.ui.theme.GlassStroke
 import com.blissless.oni.ui.theme.GradientBlue
 import com.blissless.oni.ui.theme.GradientPurple
+import com.blissless.oni.ui.theme.GradientTeal
 import com.blissless.oni.ui.theme.ReadGreen
 import com.blissless.oni.ui.theme.SilverDark
 import com.blissless.oni.ui.theme.SilverLight
@@ -102,7 +122,6 @@ import com.blissless.oni.ui.theme.StatusDropped
 import com.blissless.oni.ui.theme.StatusPaused
 import com.blissless.oni.ui.theme.StatusPlanning
 import com.blissless.oni.viewmodel.MainViewModel
-import kotlin.math.roundToInt
 
 @OptIn(ExperimentalMaterial3Api::class, ExperimentalLayoutApi::class)
 @Composable
@@ -121,24 +140,21 @@ fun MangaDetailScreen(
     val detail = mangaDetail
 
     var currentStatus by remember(detail?.id) { mutableStateOf<ReadingStatus?>(null) }
-    var currentChapter by remember(detail?.id) { mutableIntStateOf(1) }
+    var currentChapter by remember(detail?.id) { mutableIntStateOf(0) }
     var showChapterSelect by remember(detail?.id) { mutableStateOf(false) }
     var fallbackCoverUrl by remember(detail?.id) {
-        mutableStateOf(detail?.coverUrl?.takeIf { it.isNotBlank() } ?: viewModel.getCurrentMangaCoverUrl())
+        mutableStateOf(detail?.coverExtraLarge?.takeIf { it.isNotBlank() } ?: detail?.coverLarge?.takeIf { it.isNotBlank() } ?: viewModel.getCurrentMangaCoverUrl())
     }
     var showStatusMenu by remember { mutableStateOf(false) }
     var showChapterDialog by remember { mutableStateOf(false) }
 
     fun refreshTracking() {
-        detail?.id?.let { mangaId ->
+        detail?.let { d ->
+            val mangaId = "anilist_${d.id}"
             viewModel.refreshTrackingLists()
             val tracking = viewModel.resolveMangaTracking(mangaId)
             currentStatus = tracking?.status
-            currentChapter = if (tracking != null && tracking.currentChapterNumber > 0) {
-                tracking.currentChapterNumber
-            } else {
-                1
-            }
+            currentChapter = tracking?.currentChapterNumber ?: 0
             val trackingCover = tracking?.coverUrl ?: viewModel.getCurrentMangaCoverUrl()
             if (trackingCover != null) {
                 fallbackCoverUrl = trackingCover
@@ -179,521 +195,101 @@ fun MangaDetailScreen(
                         .navigationBarsPadding()
                         .verticalScroll(rememberScrollState())
                 ) {
-                    Box(modifier = Modifier.fillMaxWidth()) {
-                        val coverModel = fallbackCoverUrl ?: detail.coverUrl?.takeIf { it.isNotBlank() } ?: viewModel.getCurrentMangaCoverUrl()
-
-                        if (coverModel != null) {
-                            AsyncImage(
-                                model = coverModel,
-                                contentDescription = null,
-                                modifier = Modifier.fillMaxWidth().height(300.dp),
-                                contentScale = ContentScale.FillWidth
-                            )
-                        } else {
-                            Box(
-                                modifier = Modifier
-                                    .fillMaxWidth()
-                                    .height(300.dp)
-                                    .background(
-                                        Brush.linearGradient(
-                                            0f to DarkSurface,
-                                            1f to BlueAccent.copy(alpha = 0.15f)
-                                        )
-                                    )
-                            )
-                        }
-
-                        Box(
-                            modifier = Modifier
-                                .fillMaxWidth()
-                                .height(300.dp)
-                                .background(
-                                    Brush.verticalGradient(
-                                        colors = listOf(
-                                            DarkBackground.copy(alpha = 0.4f),
-                                            DarkBackground.copy(alpha = 0.7f),
-                                            DarkBackground
-                                        )
-                                    )
-                                )
-                        )
-
-                        Row(
-                            modifier = Modifier
-                                .fillMaxWidth()
-                                .align(Alignment.BottomStart)
-                                .padding(start = 16.dp, end = 16.dp, bottom = 16.dp),
-                            verticalAlignment = Alignment.Bottom
-                        ) {
-                            AsyncImage(
-                                model = coverModel,
-                                contentDescription = detail.title,
-                                modifier = Modifier
-                                    .width(120.dp)
-                                    .aspectRatio(0.7f)
-                                    .clip(RoundedCornerShape(14.dp)),
-                                contentScale = ContentScale.Crop
-                            )
-
-                            Spacer(modifier = Modifier.width(16.dp))
-
-                            Column(modifier = Modifier.weight(1f)) {
-                                Text(
-                                    text = detail.title,
-                                    color = Color.White,
-                                    fontWeight = FontWeight.Bold,
-                                    fontSize = 20.sp,
-                                    maxLines = 3,
-                                    overflow = TextOverflow.Ellipsis
-                                )
-                                if (detail.englishTitle != null && detail.englishTitle.isNotBlank() && detail.englishTitle != detail.title) {
-                                    Spacer(modifier = Modifier.height(4.dp))
-                                    Text(
-                                        text = detail.englishTitle,
-                                        color = SilverDark,
-                                        fontSize = 13.sp,
-                                        maxLines = 1,
-                                        overflow = TextOverflow.Ellipsis
-                                    )
-                                }
-                                Spacer(modifier = Modifier.height(8.dp))
-                                Row(verticalAlignment = Alignment.CenterVertically) {
-                                    Text(
-                                        text = detail.type,
-                                        fontSize = 11.sp,
-                                        color = BlueAccent,
-                                        fontWeight = FontWeight.SemiBold,
-                                        modifier = Modifier
-                                            .clip(RoundedCornerShape(4.dp))
-                                            .background(BlueAccent.copy(alpha = 0.15f))
-                                            .padding(horizontal = 8.dp, vertical = 2.dp)
-                                    )
-                                    Spacer(modifier = Modifier.width(8.dp))
-                                    Text(
-                                        text = detail.status,
-                                        fontSize = 11.sp,
-                                        color = if (detail.status == "Ongoing") Color(0xFF10B981) else SilverDark,
-                                        fontWeight = FontWeight.Medium
-                                    )
-                                }
-                            }
-                        }
-                    }
-
+                    HeaderSection(detail, fallbackCoverUrl)
                     Spacer(modifier = Modifier.height(20.dp))
-
-                    Card(
-                        modifier = Modifier
-                            .fillMaxWidth()
-                            .padding(horizontal = 16.dp),
-                        shape = RoundedCornerShape(16.dp),
-                        colors = CardDefaults.cardColors(containerColor = DarkCard),
-                        elevation = CardDefaults.cardElevation(defaultElevation = 0.dp),
-                        border = BorderStroke(0.5.dp, GlassStroke)
-                    ) {
-                        Row(
-                            modifier = Modifier
-                                .fillMaxWidth()
-                                .padding(horizontal = 20.dp, vertical = 14.dp),
-                            horizontalArrangement = Arrangement.SpaceEvenly,
-                            verticalAlignment = Alignment.CenterVertically
-                        ) {
-                            if (detail.avgRating > 0) {
-                                Column(horizontalAlignment = Alignment.CenterHorizontally) {
-                                    Row(verticalAlignment = Alignment.CenterVertically) {
-                                        Icon(Icons.Default.Star, contentDescription = null, tint = Color(0xFFfbbf24), modifier = Modifier.size(16.dp))
-                                        Spacer(Modifier.width(4.dp))
-                                        Text(
-                                            text = String.format("%.1f", detail.avgRating),
-                                            color = Color(0xFFfbbf24),
-                                            fontWeight = FontWeight.Bold,
-                                            fontSize = 15.sp
-                                        )
-                                    }
-                                    Spacer(Modifier.height(2.dp))
-                                    Text("Rating", color = SilverDark, fontSize = 10.sp, letterSpacing = 0.5.sp, fontWeight = FontWeight.Medium)
-                                }
-                                Box(modifier = Modifier.width(1.dp).height(32.dp).background(GlassStroke))
-                            }
-
-                            Column(horizontalAlignment = Alignment.CenterHorizontally) {
-                                Text(
-                                    text = "${detail.totalChapterCount}",
-                                    color = SilverLight,
-                                    fontWeight = FontWeight.Bold,
-                                    fontSize = 15.sp
-                                )
-                                Spacer(Modifier.height(2.dp))
-                                Text("Chapters", color = SilverDark, fontSize = 10.sp, letterSpacing = 0.5.sp, fontWeight = FontWeight.Medium)
-                            }
-
-                            if (detail.authors.isNotEmpty()) {
-                                Box(modifier = Modifier.width(1.dp).height(32.dp).background(GlassStroke))
-                                Column(horizontalAlignment = Alignment.CenterHorizontally) {
-                                    Text(
-                                        text = detail.authors.first(),
-                                        color = SilverLight,
-                                        fontWeight = FontWeight.Medium,
-                                        fontSize = 13.sp,
-                                        maxLines = 1,
-                                        overflow = TextOverflow.Ellipsis,
-                                        modifier = Modifier.widthIn(max = 100.dp)
-                                    )
-                                    Spacer(Modifier.height(2.dp))
-                                    Text("Author", color = SilverDark, fontSize = 10.sp, letterSpacing = 0.5.sp, fontWeight = FontWeight.Medium)
-                                }
-                            }
-                        }
-                    }
-
+                    StatsCard(detail, chapters.size)
                     Spacer(modifier = Modifier.height(20.dp))
-
-                    Card(
-                        modifier = Modifier
-                            .fillMaxWidth()
-                            .padding(horizontal = 16.dp),
-                        shape = RoundedCornerShape(16.dp),
-                        colors = CardDefaults.cardColors(containerColor = DarkCard),
-                        elevation = CardDefaults.cardElevation(defaultElevation = 0.dp),
-                        border = BorderStroke(0.5.dp, GlassStroke)
-                    ) {
-                        Column(modifier = Modifier.padding(16.dp)) {
-                            Button(
-                                onClick = {
-                                    viewModel.continueFromCurrentManga { onOpenReaderDirect() }
-                                },
-                                modifier = Modifier.fillMaxWidth().height(52.dp),
-                                colors = ButtonDefaults.buttonColors(containerColor = BlueAccent),
-                                shape = RoundedCornerShape(14.dp),
-                                elevation = ButtonDefaults.buttonElevation(defaultElevation = 6.dp)
-                            ) {
-                                Icon(Icons.Default.PlayArrow, contentDescription = null, modifier = Modifier.size(20.dp))
-                                Spacer(Modifier.width(8.dp))
-                                Text(
-                                    text = if (currentStatus == ReadingStatus.READING) "Ch. ${currentChapter + 1}" else "Start Reading",
-                                    fontWeight = FontWeight.Bold,
-                                    fontSize = 14.sp,
-                                    letterSpacing = 0.3.sp
-                                )
+                    ActionButtonsCard(
+                        detail = detail,
+                        currentStatus = currentStatus,
+                        currentChapter = currentChapter,
+                        chapters = chapters,
+                        viewModel = viewModel,
+                        showStatusMenu = showStatusMenu,
+                        onStatusMenuToggle = { showStatusMenu = it },
+                        showChapterDialog = showChapterDialog,
+                        onChapterDialogToggle = { showChapterDialog = it },
+                        onStartReading = {
+                            viewModel.continueFromCurrentManga { onOpenReaderDirect() }
+                        },
+                        onOpenChapterSelect = {
+                            showChapterSelect = !showChapterSelect
+                            if (showChapterSelect) {
+                                viewModel.showChapterListOnly()
+                                onOpenReader()
                             }
-
-                            Spacer(modifier = Modifier.height(10.dp))
-
-                            Row(
-                                modifier = Modifier.fillMaxWidth(),
-                                horizontalArrangement = Arrangement.spacedBy(10.dp)
-                            ) {
-                                Row(
-                                    modifier = Modifier
-                                        .weight(1f)
-                                        .height(44.dp)
-                                        .clip(RoundedCornerShape(12.dp))
-                                        .background(DarkSurfaceVariant.copy(alpha = 0.5f))
-                                        .clickable { showStatusMenu = true },
-                                    horizontalArrangement = Arrangement.Center,
-                                    verticalAlignment = Alignment.CenterVertically
-                                ) {
-                                    Icon(
-                                        when (currentStatus) {
-                                            ReadingStatus.READING -> Icons.Default.Bookmark
-                                            ReadingStatus.PLANNING -> Icons.Default.CalendarMonth
-                                            else -> Icons.Default.BookmarkBorder
-                                        },
-                                        contentDescription = null,
-                                        modifier = Modifier.size(18.dp),
-                                        tint = when (currentStatus) {
-                                            ReadingStatus.READING -> BlueAccent
-                                            ReadingStatus.PLANNING -> StatusPlanning
-                                            ReadingStatus.COMPLETED -> StatusCompleted
-                                            else -> SilverDark
-                                        }
-                                    )
-                                    Spacer(Modifier.width(6.dp))
-                                    Text(
-                                        text = when (currentStatus) {
-                                            ReadingStatus.READING -> "Reading"
-                                            ReadingStatus.PLANNING -> "Planned"
-                                            ReadingStatus.COMPLETED -> "Completed"
-                                            ReadingStatus.ON_HOLD -> "Paused"
-                                            ReadingStatus.DROPPED -> "Dropped"
-                                            null -> "Track"
-                                        },
-                                        fontWeight = FontWeight.Medium,
-                                        fontSize = 13.sp,
-                                        color = when (currentStatus) {
-                                            ReadingStatus.READING -> BlueAccent
-                                            ReadingStatus.PLANNING -> StatusPlanning
-                                            ReadingStatus.COMPLETED -> StatusCompleted
-                                            else -> SilverLight
-                                        }
-                                    )
-                                }
-                                DropdownMenu(
-                                    expanded = showStatusMenu,
-                                    onDismissRequest = { showStatusMenu = false }
-                                ) {
-                                    val statuses = listOf(
-                                        ReadingStatus.READING,
-                                        ReadingStatus.PLANNING,
-                                        ReadingStatus.COMPLETED,
-                                        ReadingStatus.ON_HOLD,
-                                        ReadingStatus.DROPPED
-                                    )
-                                    statuses.forEach { status ->
-                                        val label = when (status) {
-                                            ReadingStatus.READING -> "Reading"
-                                            ReadingStatus.PLANNING -> "Plan to Read"
-                                            ReadingStatus.COMPLETED -> "Completed"
-                                            ReadingStatus.ON_HOLD -> "On Hold"
-                                            ReadingStatus.DROPPED -> "Dropped"
-                                        }
-                                        val statusColor = when (status) {
-                                            ReadingStatus.READING -> BlueAccent
-                                            ReadingStatus.PLANNING -> StatusPlanning
-                                            ReadingStatus.COMPLETED -> StatusCompleted
-                                            ReadingStatus.ON_HOLD -> StatusPaused
-                                            ReadingStatus.DROPPED -> StatusDropped
-                                        }
-                                        DropdownMenuItem(
-                                            text = {
-                                                Row(verticalAlignment = Alignment.CenterVertically) {
-                                                    Box(
-                                                        modifier = Modifier
-                                                            .size(8.dp)
-                                                            .clip(CircleShape)
-                                                            .background(statusColor)
-                                                    )
-                                                    Spacer(Modifier.width(10.dp))
-                                                    Text(label, fontSize = 14.sp, color = SilverLight)
-                                                }
-                                            },
-                                            onClick = {
-                                                showStatusMenu = false
-                                                if (currentStatus != status) {
-                                                    viewModel.updateTrackingStatus(detail.id, status)
-                                                    currentStatus = status
-                                                }
-                                            }
-                                        )
-                                    }
-                                }
-
-                                Row(
-                                    modifier = Modifier
-                                        .weight(1f)
-                                        .height(44.dp)
-                                        .clip(RoundedCornerShape(12.dp))
-                                        .background(DarkSurfaceVariant.copy(alpha = 0.5f))
-                                        .clickable { showChapterDialog = true },
-                                    horizontalArrangement = Arrangement.Center,
-                                    verticalAlignment = Alignment.CenterVertically
-                                ) {
-                                    Icon(Icons.Default.Edit, contentDescription = null, modifier = Modifier.size(18.dp), tint = BlueLight)
-                                    Spacer(Modifier.width(6.dp))
-                                    Text("Set Progress", fontWeight = FontWeight.Medium, fontSize = 13.sp, color = SilverLight)
-                                }
-                            }
-
-                            Spacer(modifier = Modifier.height(10.dp))
-
-                            Row(
-                                modifier = Modifier
-                                    .fillMaxWidth()
-                                    .height(44.dp)
-                                    .clip(RoundedCornerShape(12.dp))
-                                    .background(DarkSurfaceVariant.copy(alpha = 0.5f))
-                                    .clickable {
-                                        showChapterSelect = !showChapterSelect
-                                        if (showChapterSelect) {
-                                            viewModel.showChapterListOnly()
-                                            onOpenReader()
-                                        }
-                                    },
-                                horizontalArrangement = Arrangement.Center,
-                                verticalAlignment = Alignment.CenterVertically
-                            ) {
-                                Icon(Icons.AutoMirrored.Filled.List, contentDescription = null, modifier = Modifier.size(18.dp), tint = BlueAccent)
-                                Spacer(Modifier.width(6.dp))
-                                Text("All Chapters", fontWeight = FontWeight.Medium, fontSize = 13.sp, color = SilverLight, letterSpacing = 0.3.sp)
-                            }
+                        },
+                        onStatusChange = { status ->
+                            viewModel.updateTrackingStatus("anilist_${detail.id}", status)
+                            currentStatus = status
+                        },
+                        onRemoveAnilist = {
+                            viewModel.removeFromAnilist("anilist_${detail.id}")
+                            currentStatus = null
                         }
-                    }
+                    )
 
-                    if (chapters.isNotEmpty()) {
+                    if (!detail.description.isNullOrBlank()) {
                         Spacer(modifier = Modifier.height(24.dp))
-                        Card(
-                            modifier = Modifier
-                                .fillMaxWidth()
-                                .padding(horizontal = 16.dp),
-                            shape = RoundedCornerShape(16.dp),
-                            colors = CardDefaults.cardColors(containerColor = DarkCard),
-                            elevation = CardDefaults.cardElevation(defaultElevation = 0.dp),
-                            border = BorderStroke(0.5.dp, GlassStroke)
-                        ) {
-                            Column(modifier = Modifier.padding(16.dp)) {
-                                Row(
-                                    modifier = Modifier.fillMaxWidth(),
-                                    horizontalArrangement = Arrangement.SpaceBetween,
-                                    verticalAlignment = Alignment.CenterVertically
-                                ) {
-                                    Text(
-                                        "Quick Jump",
-                                        color = Color.White,
-                                        fontWeight = FontWeight.Bold,
-                                        fontSize = 15.sp,
-                                        letterSpacing = 0.3.sp
-                                    )
-                                    Text(
-                                        "Ch. $currentChapter of ${chapters.size}",
-                                        color = SilverDark,
-                                        fontSize = 12.sp,
-                                        letterSpacing = 0.2.sp
-                                    )
-                                }
-                                Spacer(modifier = Modifier.height(14.dp))
-                                val totalCh = chapters.size
-                                val maxVisible = minOf(totalCh, 7)
-                                val startIdx = (currentChapter - 3).coerceAtLeast(0)
-                                val endIdx = (startIdx + maxVisible).coerceAtMost(totalCh)
-                                val visibleChapters = chapters.subList(startIdx, endIdx)
-
-                                Row(
-                                    modifier = Modifier.fillMaxWidth(),
-                                    horizontalArrangement = Arrangement.SpaceEvenly
-                                ) {
-                                    visibleChapters.forEachIndexed { idx, ch ->
-                                        val chNum = startIdx + idx + 1
-                                        val isCurrent = chNum == currentChapter
-                                        val isRead = (startIdx + idx) in readChapterIndices
-                                        Column(
-                                            horizontalAlignment = Alignment.CenterHorizontally,
-                                            modifier = Modifier.clickable {
-                                                viewModel.selectChapter(startIdx + idx)
-                                                onOpenReaderDirect()
-                                            }
-                                        ) {
-                                            Box(
-                                                modifier = Modifier
-                                                    .size(44.dp)
-                                                    .clip(CircleShape)
-                                                    .background(
-                                                        when {
-                                                            isCurrent -> BlueAccent
-                                                            isRead -> ReadGreen.copy(alpha = 0.2f)
-                                                            else -> DarkSurfaceVariant.copy(alpha = 0.5f)
-                                                        }
-                                                    )
-                                                    .then(
-                                                        if (isCurrent) Modifier.border(2.dp, BlueLight.copy(alpha = 0.5f), CircleShape)
-                                                        else Modifier
-                                                    ),
-                                                contentAlignment = Alignment.Center
-                                            ) {
-                                                Text(
-                                                    text = "$chNum",
-                                                    color = when {
-                                                        isCurrent -> Color.White
-                                                        isRead -> ReadGreen
-                                                        else -> SilverDark
-                                                    },
-                                                    fontSize = 14.sp,
-                                                    fontWeight = if (isCurrent) FontWeight.Bold else FontWeight.Medium
-                                                )
-                                            }
-                                            Spacer(modifier = Modifier.height(4.dp))
-                                            Text(
-                                                text = if (isCurrent) "Now" else if (isRead) "Read" else "",
-                                                color = if (isCurrent) BlueLight else ReadGreen.copy(alpha = 0.7f),
-                                                fontSize = 10.sp,
-                                                fontWeight = FontWeight.Medium,
-                                                letterSpacing = 0.5.sp
-                                            )
-                                        }
-                                    }
-                                }
-                            }
-                        }
+                        SectionDivider()
+                        Spacer(modifier = Modifier.height(16.dp))
+                        SynopsisSection(detail.description)
                     }
 
                     if (detail.genres.isNotEmpty()) {
                         Spacer(modifier = Modifier.height(24.dp))
-                        HorizontalDivider(color = GlassStroke, modifier = Modifier.padding(horizontal = 16.dp))
+                        SectionDivider()
                         Spacer(modifier = Modifier.height(16.dp))
-                        Column(modifier = Modifier.padding(horizontal = 16.dp)) {
-                            Text(
-                                "Genres",
-                                color = Color.White,
-                                fontWeight = FontWeight.Bold,
-                                fontSize = 14.sp,
-                                letterSpacing = 0.8.sp
-                            )
-                            Spacer(modifier = Modifier.height(12.dp))
-                            FlowRow(
-                                horizontalArrangement = Arrangement.spacedBy(8.dp),
-                                verticalArrangement = Arrangement.spacedBy(6.dp)
-                            ) {
-                                detail.genres.forEach { genre ->
-                                    Box(
-                                        modifier = Modifier
-                                            .clip(RoundedCornerShape(20.dp))
-                                            .background(DarkSurfaceVariant.copy(alpha = 0.5f))
-                                            .border(0.5.dp, GlassStroke, RoundedCornerShape(20.dp))
-                                            .padding(horizontal = 14.dp, vertical = 6.dp)
-                                    ) {
-                                        Text(
-                                            genre,
-                                            fontSize = 12.sp,
-                                            fontWeight = FontWeight.Medium,
-                                            color = SilverLight.copy(alpha = 0.8f)
-                                        )
-                                    }
-                                }
-                            }
-                        }
+                        GenresSection(detail.genres)
                     }
 
-                    if (detail.otherNames.isNotEmpty()) {
+                    if (detail.tags.isNotEmpty()) {
                         Spacer(modifier = Modifier.height(24.dp))
-                        HorizontalDivider(color = GlassStroke, modifier = Modifier.padding(horizontal = 16.dp))
+                        SectionDivider()
                         Spacer(modifier = Modifier.height(16.dp))
-                        Column(modifier = Modifier.padding(horizontal = 16.dp)) {
-                            Text(
-                                "Also Known As",
-                                color = Color.White,
-                                fontWeight = FontWeight.Bold,
-                                fontSize = 14.sp,
-                                letterSpacing = 0.8.sp
-                            )
-                            Spacer(modifier = Modifier.height(10.dp))
-                            Text(
-                                text = detail.otherNames.joinToString("  ·  "),
-                                color = SilverDark,
-                                fontSize = 13.sp,
-                                lineHeight = 20.sp
-                            )
-                        }
+                        TagsSection(detail.tags)
                     }
 
-                    if (detail.synopsis.isNotEmpty()) {
+                    if (detail.characters.isNotEmpty()) {
                         Spacer(modifier = Modifier.height(24.dp))
-                        HorizontalDivider(color = GlassStroke, modifier = Modifier.padding(horizontal = 16.dp))
+                        SectionDivider()
                         Spacer(modifier = Modifier.height(16.dp))
-                        Column(modifier = Modifier.padding(horizontal = 16.dp)) {
-                            Text(
-                                "Synopsis",
-                                color = Color.White,
-                                fontWeight = FontWeight.Bold,
-                                fontSize = 14.sp,
-                                letterSpacing = 0.8.sp
-                            )
-                            Spacer(modifier = Modifier.height(10.dp))
-                            Text(
-                                text = detail.synopsis,
-                                color = SilverLight.copy(alpha = 0.85f),
-                                fontSize = 14.sp,
-                                lineHeight = 22.sp
-                            )
-                        }
+                        CharactersSection(detail.characters)
+                    }
+
+                    if (detail.relations.isNotEmpty()) {
+                        Spacer(modifier = Modifier.height(24.dp))
+                        SectionDivider()
+                        Spacer(modifier = Modifier.height(16.dp))
+                        RelationsSection(detail.relations)
+                    }
+
+                    if (detail.rankings.isNotEmpty()) {
+                        Spacer(modifier = Modifier.height(24.dp))
+                        SectionDivider()
+                        Spacer(modifier = Modifier.height(16.dp))
+                        RankingsSection(detail.rankings)
+                    }
+
+                    if (detail.recommendations.isNotEmpty()) {
+                        Spacer(modifier = Modifier.height(24.dp))
+                        SectionDivider()
+                        Spacer(modifier = Modifier.height(16.dp))
+                        RecommendationsSection(detail.recommendations)
+                    }
+
+                    if (detail.synonyms.isNotEmpty()) {
+                        Spacer(modifier = Modifier.height(24.dp))
+                        SectionDivider()
+                        Spacer(modifier = Modifier.height(16.dp))
+                        SynonymsSection(detail.synonyms)
+                    }
+
+                    if (detail.staff.isNotEmpty()) {
+                        Spacer(modifier = Modifier.height(24.dp))
+                        SectionDivider()
+                        Spacer(modifier = Modifier.height(16.dp))
+                        StaffSection(detail.staff)
                     }
 
                     Spacer(modifier = Modifier.height(80.dp))
@@ -729,7 +325,7 @@ fun MangaDetailScreen(
         if (showChapterDialog) {
             ChapterProgressDialog(
                 currentChapter = currentChapter,
-                totalChapters = detail?.totalChapterCount ?: 0,
+                totalChapters = chapters.size.coerceAtLeast(detail?.chapters ?: 0),
                 onSet = { chapter ->
                     viewModel.setManualChapterProgress(chapter)
                     currentChapter = chapter
@@ -739,6 +335,840 @@ fun MangaDetailScreen(
             )
         }
     }
+}
+
+@Composable
+private fun HeaderSection(detail: AniListMangaDetail, fallbackCoverUrl: String?) {
+    val coverModel = detail.coverExtraLarge ?: detail.coverLarge ?: fallbackCoverUrl
+
+    Box(modifier = Modifier.fillMaxWidth()) {
+        if (detail.bannerImage != null) {
+            AsyncImage(
+                model = detail.bannerImage,
+                contentDescription = null,
+                modifier = Modifier.fillMaxWidth().height(300.dp),
+                contentScale = ContentScale.FillWidth
+            )
+        } else if (coverModel != null) {
+            AsyncImage(
+                model = coverModel,
+                contentDescription = null,
+                modifier = Modifier.fillMaxWidth().height(300.dp),
+                contentScale = ContentScale.FillWidth
+            )
+        } else {
+            Box(
+                modifier = Modifier
+                    .fillMaxWidth()
+                    .height(300.dp)
+                    .background(
+                        Brush.linearGradient(
+                            0f to DarkSurface,
+                            1f to BlueAccent.copy(alpha = 0.15f)
+                        )
+                    )
+            )
+        }
+
+        Box(
+            modifier = Modifier
+                .fillMaxWidth()
+                .height(300.dp)
+                .background(
+                    Brush.verticalGradient(
+                        colors = listOf(
+                            DarkBackground.copy(alpha = 0.4f),
+                            DarkBackground.copy(alpha = 0.7f),
+                            DarkBackground
+                        )
+                    )
+                )
+        )
+
+        Row(
+            modifier = Modifier
+                .fillMaxWidth()
+                .align(Alignment.BottomStart)
+                .padding(start = 16.dp, end = 16.dp, bottom = 16.dp),
+            verticalAlignment = Alignment.Bottom
+        ) {
+            if (coverModel != null) {
+                AsyncImage(
+                    model = coverModel,
+                    contentDescription = detail.titleRomaji,
+                    modifier = Modifier
+                        .width(120.dp)
+                        .aspectRatio(0.7f)
+                        .clip(RoundedCornerShape(14.dp)),
+                    contentScale = ContentScale.Crop
+                )
+            } else {
+                Box(
+                    modifier = Modifier
+                        .width(120.dp)
+                        .aspectRatio(0.7f)
+                        .clip(RoundedCornerShape(14.dp))
+                        .background(DarkSurfaceVariant),
+                    contentAlignment = Alignment.Center
+                ) {
+                    Text(detail.titleRomaji.take(2), color = SilverDark, fontWeight = FontWeight.Bold)
+                }
+            }
+
+            Spacer(modifier = Modifier.width(16.dp))
+
+            Column(modifier = Modifier.weight(1f)) {
+                Text(
+                    text = detail.titleRomaji,
+                    color = Color.White,
+                    fontWeight = FontWeight.Bold,
+                    fontSize = 20.sp,
+                    maxLines = 3,
+                    overflow = TextOverflow.Ellipsis
+                )
+                if (detail.titleEnglish != null && detail.titleEnglish.isNotBlank() && detail.titleEnglish != detail.titleRomaji) {
+                    Spacer(modifier = Modifier.height(4.dp))
+                    Text(
+                        text = detail.titleEnglish,
+                        color = SilverDark,
+                        fontSize = 13.sp,
+                        maxLines = 1,
+                        overflow = TextOverflow.Ellipsis
+                    )
+                }
+                Spacer(modifier = Modifier.height(8.dp))
+                Row(verticalAlignment = Alignment.CenterVertically) {
+                    val formatLabel = formatLabel(detail.format)
+                    if (formatLabel != null) {
+                        Text(
+                            text = formatLabel,
+                            fontSize = 11.sp,
+                            color = BlueAccent,
+                            fontWeight = FontWeight.SemiBold,
+                            modifier = Modifier
+                                .clip(RoundedCornerShape(4.dp))
+                                .background(BlueAccent.copy(alpha = 0.15f))
+                                .padding(horizontal = 8.dp, vertical = 2.dp)
+                        )
+                        Spacer(modifier = Modifier.width(8.dp))
+                    }
+                    Text(
+                        text = formatStatus(detail.status),
+                        fontSize = 11.sp,
+                        color = if (detail.status == "RELEASING") Color(0xFF10B981) else SilverDark,
+                        fontWeight = FontWeight.Medium
+                    )
+                }
+                if (detail.source != null) {
+                    Spacer(modifier = Modifier.height(4.dp))
+                    Text(
+                        text = "Source: ${formatSource(detail.source)}",
+                        color = SilverDark.copy(alpha = 0.7f),
+                        fontSize = 11.sp
+                    )
+                }
+                if (detail.startYear != null) {
+                    Spacer(modifier = Modifier.height(6.dp))
+                    Row(
+                        verticalAlignment = Alignment.CenterVertically,
+                        modifier = Modifier
+                            .clip(RoundedCornerShape(6.dp))
+                            .background(SilverDark.copy(alpha = 0.12f))
+                            .padding(horizontal = 8.dp, vertical = 3.dp)
+                    ) {
+                        Icon(
+                            Icons.Default.CalendarMonth,
+                            contentDescription = null,
+                            tint = SilverDark,
+                            modifier = Modifier.size(12.dp)
+                        )
+                        Spacer(Modifier.width(5.dp))
+                        Text(
+                            text = buildString {
+                                append(formatDate(detail.startYear, detail.startMonth, detail.startDay))
+                                val endDate = formatDate(detail.endYear, detail.endMonth, detail.endDay)
+                                if (endDate != "?") {
+                                    append(" - $endDate")
+                                }
+                            },
+                            color = SilverDark,
+                            fontSize = 11.sp,
+                            fontWeight = FontWeight.Medium
+                        )
+                        if (detail.countryOfOrigin != null) {
+                            Spacer(Modifier.width(8.dp))
+                            Text(
+                                text = detail.countryOfOrigin!!,
+                                color = SilverDark.copy(alpha = 0.5f),
+                                fontSize = 10.sp
+                            )
+                        }
+                    }
+                }
+            }
+        }
+    }
+}
+
+@Composable
+private fun StatsCard(detail: AniListMangaDetail, actualChapters: Int = 0) {
+    Card(
+        modifier = Modifier
+            .fillMaxWidth()
+            .padding(horizontal = 16.dp),
+        shape = RoundedCornerShape(16.dp),
+        colors = CardDefaults.cardColors(containerColor = DarkCard),
+        elevation = CardDefaults.cardElevation(defaultElevation = 0.dp),
+        border = BorderStroke(0.5.dp, GlassStroke)
+    ) {
+        Row(
+            modifier = Modifier
+                .fillMaxWidth()
+                .padding(horizontal = 16.dp, vertical = 14.dp),
+            horizontalArrangement = Arrangement.SpaceEvenly,
+            verticalAlignment = Alignment.CenterVertically
+        ) {
+            StatItem(
+                icon = Icons.Default.Star,
+                value = detail.averageScore?.let { "${it / 10f}" } ?: "-",
+                label = "Score",
+                color = Color(0xFFfbbf24)
+            )
+            val displayChapters = detail.chapters ?: actualChapters
+            if (displayChapters > 0) {
+                DividerDot()
+                StatItem(
+                    icon = null,
+                    value = "$displayChapters",
+                    label = "Chapters",
+                    color = SilverLight
+                )
+            }
+            if (detail.volumes != null) {
+                DividerDot()
+                StatItem(
+                    icon = null,
+                    value = "${detail.volumes}",
+                    label = "Volumes",
+                    color = SilverLight
+                )
+            }
+            if (detail.popularity != null) {
+                DividerDot()
+                StatItem(
+                    icon = Icons.Default.TrendingUp,
+                    value = formatNumber(detail.popularity),
+                    label = "Popular",
+                    color = BlueLight
+                )
+            }
+            if (detail.favourites != null && detail.favourites!! > 0) {
+                DividerDot()
+                StatItem(
+                    icon = Icons.Default.Favorite,
+                    value = formatNumber(detail.favourites!!),
+                    label = "Fav",
+                    color = Color(0xFFec4899)
+                )
+            }
+        }
+    }
+}
+
+@Composable
+private fun StatItem(icon: ImageVector?, value: String, label: String, color: Color) {
+    Column(horizontalAlignment = Alignment.CenterHorizontally) {
+        Row(verticalAlignment = Alignment.CenterVertically) {
+            if (icon != null) {
+                Icon(icon, contentDescription = null, tint = color, modifier = Modifier.size(14.dp))
+                Spacer(Modifier.width(3.dp))
+            }
+            Text(value, color = color, fontWeight = FontWeight.Bold, fontSize = if (value.length > 4) 13.sp else 15.sp)
+        }
+        Spacer(Modifier.height(2.dp))
+        Text(label, color = SilverDark, fontSize = 10.sp, letterSpacing = 0.5.sp, fontWeight = FontWeight.Medium)
+    }
+}
+
+@Composable
+private fun DividerDot() {
+    Box(modifier = Modifier.width(1.dp).height(32.dp).background(GlassStroke))
+}
+
+@Composable
+private fun ActionButtonsCard(
+    detail: AniListMangaDetail,
+    currentStatus: ReadingStatus?,
+    currentChapter: Int,
+    chapters: List<*>,
+    viewModel: MainViewModel,
+    showStatusMenu: Boolean,
+    onStatusMenuToggle: (Boolean) -> Unit,
+    showChapterDialog: Boolean,
+    onChapterDialogToggle: (Boolean) -> Unit,
+    onStartReading: () -> Unit,
+    onOpenChapterSelect: () -> Unit,
+    onStatusChange: (ReadingStatus) -> Unit,
+    onRemoveAnilist: () -> Unit
+) {
+    Card(
+        modifier = Modifier
+            .fillMaxWidth()
+            .padding(horizontal = 16.dp),
+        shape = RoundedCornerShape(16.dp),
+        colors = CardDefaults.cardColors(containerColor = DarkCard),
+        elevation = CardDefaults.cardElevation(defaultElevation = 0.dp),
+        border = BorderStroke(0.5.dp, GlassStroke)
+    ) {
+        Column(modifier = Modifier.padding(16.dp)) {
+            val totalAvailable = chapters.size.coerceAtLeast(detail.chapters ?: 0)
+            val hasNextChapter = totalAvailable == 0 || currentChapter + 1 <= totalAvailable
+            if (hasNextChapter) {
+                Button(
+                    onClick = onStartReading,
+                    modifier = Modifier.fillMaxWidth().height(52.dp),
+                    colors = ButtonDefaults.buttonColors(containerColor = BlueAccent),
+                    shape = RoundedCornerShape(14.dp),
+                    elevation = ButtonDefaults.buttonElevation(defaultElevation = 6.dp)
+                ) {
+                    Icon(Icons.Default.PlayArrow, contentDescription = null, modifier = Modifier.size(20.dp))
+                    Spacer(Modifier.width(8.dp))
+                    Text(
+                        text = if (currentStatus == ReadingStatus.READING) "Ch. ${currentChapter + 1}" else "Start Reading",
+                        fontWeight = FontWeight.Bold,
+                        fontSize = 14.sp,
+                        letterSpacing = 0.3.sp
+                    )
+                }
+            }
+
+            Spacer(modifier = Modifier.height(10.dp))
+
+            Row(
+                modifier = Modifier.fillMaxWidth(),
+                horizontalArrangement = Arrangement.spacedBy(10.dp)
+            ) {
+                Box(modifier = Modifier.weight(1f)) {
+                    StatusButton(currentStatus, showStatusMenu, onStatusMenuToggle, onStatusChange, onRemoveAnilist)
+                }
+                Box(modifier = Modifier.weight(1f)) {
+                    ProgressButton(onClick = { onChapterDialogToggle(true) })
+                }
+            }
+
+            Spacer(modifier = Modifier.height(10.dp))
+
+            Row(
+                modifier = Modifier
+                    .fillMaxWidth()
+                    .height(44.dp)
+                    .clip(RoundedCornerShape(12.dp))
+                    .background(DarkSurfaceVariant.copy(alpha = 0.5f))
+                    .clickable(onClick = onOpenChapterSelect),
+                horizontalArrangement = Arrangement.Center,
+                verticalAlignment = Alignment.CenterVertically
+            ) {
+                Icon(Icons.AutoMirrored.Filled.List, contentDescription = null, modifier = Modifier.size(18.dp), tint = BlueAccent)
+                Spacer(Modifier.width(6.dp))
+                Text("All Chapters", fontWeight = FontWeight.Medium, fontSize = 13.sp, color = SilverLight, letterSpacing = 0.3.sp)
+            }
+
+        }
+    }
+}
+
+@Composable
+private fun StatusButton(
+    currentStatus: ReadingStatus?,
+    showStatusMenu: Boolean,
+    onStatusMenuToggle: (Boolean) -> Unit,
+    onStatusChange: (ReadingStatus) -> Unit,
+    onRemoveAnilist: () -> Unit
+) {
+    Box(modifier = Modifier.fillMaxWidth()) {
+        Row(
+            modifier = Modifier
+                .fillMaxWidth()
+                .height(44.dp)
+                .clip(RoundedCornerShape(12.dp))
+                .background(DarkSurfaceVariant.copy(alpha = 0.5f))
+                .clickable { onStatusMenuToggle(true) },
+            horizontalArrangement = Arrangement.Center,
+            verticalAlignment = Alignment.CenterVertically
+        ) {
+            Icon(
+                when (currentStatus) {
+                    ReadingStatus.READING -> Icons.Default.Bookmark
+                    ReadingStatus.PLANNING -> Icons.Default.CalendarMonth
+                    else -> Icons.Default.BookmarkBorder
+                },
+                contentDescription = null,
+                modifier = Modifier.size(18.dp),
+                tint = when (currentStatus) {
+                    ReadingStatus.READING -> BlueAccent
+                    ReadingStatus.PLANNING -> StatusPlanning
+                    ReadingStatus.COMPLETED -> StatusCompleted
+                    else -> SilverDark
+                }
+            )
+            Spacer(Modifier.width(6.dp))
+            Text(
+                text = when (currentStatus) {
+                    ReadingStatus.READING -> "Reading"
+                    ReadingStatus.PLANNING -> "Planned"
+                    ReadingStatus.COMPLETED -> "Completed"
+                    ReadingStatus.ON_HOLD -> "Paused"
+                    ReadingStatus.DROPPED -> "Dropped"
+                    null -> "Track"
+                },
+                fontWeight = FontWeight.Medium,
+                fontSize = 13.sp,
+                color = when (currentStatus) {
+                    ReadingStatus.READING -> BlueAccent
+                    ReadingStatus.PLANNING -> StatusPlanning
+                    ReadingStatus.COMPLETED -> StatusCompleted
+                    else -> SilverLight
+                }
+            )
+        }
+        DropdownMenu(
+            expanded = showStatusMenu,
+            onDismissRequest = { onStatusMenuToggle(false) }
+        ) {
+            val statuses = listOf(
+                ReadingStatus.READING,
+                ReadingStatus.PLANNING,
+                ReadingStatus.COMPLETED,
+                ReadingStatus.ON_HOLD,
+                ReadingStatus.DROPPED
+            )
+            statuses.forEach { status ->
+                val label = when (status) {
+                    ReadingStatus.READING -> "Reading"
+                    ReadingStatus.PLANNING -> "Plan to Read"
+                    ReadingStatus.COMPLETED -> "Completed"
+                    ReadingStatus.ON_HOLD -> "On Hold"
+                    ReadingStatus.DROPPED -> "Dropped"
+                }
+                val statusColor = when (status) {
+                    ReadingStatus.READING -> BlueAccent
+                    ReadingStatus.PLANNING -> StatusPlanning
+                    ReadingStatus.COMPLETED -> StatusCompleted
+                    ReadingStatus.ON_HOLD -> StatusPaused
+                    ReadingStatus.DROPPED -> StatusDropped
+                }
+                DropdownMenuItem(
+                    text = {
+                        Row(verticalAlignment = Alignment.CenterVertically) {
+                            Box(modifier = Modifier.size(8.dp).clip(CircleShape).background(statusColor))
+                            Spacer(Modifier.width(10.dp))
+                            Text(label, fontSize = 14.sp, color = SilverLight)
+                        }
+                    },
+                    onClick = {
+                        onStatusMenuToggle(false)
+                        if (currentStatus != status) {
+                            onStatusChange(status)
+                        }
+                    }
+                )
+            }
+            HorizontalDivider(color = GlassStroke)
+            DropdownMenuItem(
+                text = {
+                    Row(verticalAlignment = Alignment.CenterVertically) {
+                        Icon(Icons.Default.Close, contentDescription = null, tint = StatusDropped, modifier = Modifier.size(16.dp))
+                        Spacer(Modifier.width(10.dp))
+                        Text("Remove from AniList", fontSize = 14.sp, color = SilverLight)
+                    }
+                },
+                onClick = {
+                    onStatusMenuToggle(false)
+                    onRemoveAnilist()
+                }
+            )
+        }
+    }
+}
+
+@Composable
+private fun ProgressButton(onClick: () -> Unit) {
+    Row(
+        modifier = Modifier
+            .fillMaxWidth()
+            .height(44.dp)
+            .clip(RoundedCornerShape(12.dp))
+            .background(DarkSurfaceVariant.copy(alpha = 0.5f))
+            .clickable(onClick = onClick),
+        horizontalArrangement = Arrangement.Center,
+        verticalAlignment = Alignment.CenterVertically
+    ) {
+        Icon(Icons.Default.Edit, contentDescription = null, modifier = Modifier.size(18.dp), tint = BlueLight)
+        Spacer(Modifier.width(6.dp))
+        Text("Set Progress", fontWeight = FontWeight.Medium, fontSize = 13.sp, color = SilverLight)
+    }
+}
+
+@Composable
+private fun GenresSection(genres: List<String>) {
+    Column(modifier = Modifier.padding(horizontal = 16.dp)) {
+        SectionTitle("Genres")
+        Spacer(modifier = Modifier.height(12.dp))
+        FlowRow(
+            horizontalArrangement = Arrangement.spacedBy(8.dp),
+            verticalArrangement = Arrangement.spacedBy(6.dp)
+        ) {
+            genres.forEach { genre ->
+                Box(
+                    modifier = Modifier
+                        .clip(RoundedCornerShape(20.dp))
+                        .background(DarkSurfaceVariant.copy(alpha = 0.5f))
+                        .border(0.5.dp, GlassStroke, RoundedCornerShape(20.dp))
+                        .padding(horizontal = 14.dp, vertical = 6.dp)
+                ) {
+                    Text(genre, fontSize = 12.sp, fontWeight = FontWeight.Medium, color = SilverLight.copy(alpha = 0.8f))
+                }
+            }
+        }
+    }
+}
+
+@Composable
+private fun TagsSection(tags: List<AniListTag>) {
+    Column(modifier = Modifier.padding(horizontal = 16.dp)) {
+        SectionTitle("Tags")
+        Spacer(modifier = Modifier.height(12.dp))
+        FlowRow(
+            horizontalArrangement = Arrangement.spacedBy(6.dp),
+            verticalArrangement = Arrangement.spacedBy(5.dp)
+        ) {
+            tags.sortedByDescending { it.rank }.take(20).forEach { tag ->
+                val tagColor = when {
+                    tag.rank >= 80 -> BlueAccent
+                    tag.rank >= 50 -> BlueLight
+                    else -> SilverDark
+                }
+                Box(
+                    modifier = Modifier
+                        .clip(RoundedCornerShape(16.dp))
+                        .background(tagColor.copy(alpha = 0.12f))
+                        .border(0.5.dp, tagColor.copy(alpha = 0.3f), RoundedCornerShape(16.dp))
+                        .padding(horizontal = 10.dp, vertical = 4.dp)
+                ) {
+                    Text(
+                        text = "${tag.name} ${(tag.rank / 10)}",
+                        fontSize = 11.sp,
+                        fontWeight = FontWeight.Medium,
+                        color = tagColor
+                    )
+                }
+            }
+        }
+    }
+}
+
+@Composable
+private fun CharactersSection(characters: List<AniListCharacterEntry>) {
+    Column(modifier = Modifier.padding(horizontal = 16.dp)) {
+        SectionTitle("Characters")
+        Spacer(modifier = Modifier.height(12.dp))
+        LazyRow(
+            horizontalArrangement = Arrangement.spacedBy(10.dp)
+        ) {
+            items(characters) { char ->
+                Card(
+                    modifier = Modifier.width(100.dp),
+                    shape = RoundedCornerShape(12.dp),
+                    colors = CardDefaults.cardColors(containerColor = DarkCard),
+                    border = BorderStroke(0.5.dp, GlassStroke),
+                    elevation = CardDefaults.cardElevation(defaultElevation = 0.dp)
+                ) {
+                    Column(horizontalAlignment = Alignment.CenterHorizontally) {
+                        if (char.image != null) {
+                            AsyncImage(
+                                model = char.image,
+                                contentDescription = char.name,
+                                modifier = Modifier
+                                    .fillMaxWidth()
+                                    .height(120.dp),
+                                contentScale = ContentScale.Crop
+                            )
+                        } else {
+                            Box(
+                                modifier = Modifier.fillMaxWidth().height(120.dp).background(DarkSurfaceVariant),
+                                contentAlignment = Alignment.Center
+                            ) {
+                                Text(char.name.take(2), color = SilverDark)
+                            }
+                        }
+                        Text(
+                            text = char.name,
+                            fontSize = 11.sp,
+                            color = SilverLight,
+                            fontWeight = FontWeight.Medium,
+                            maxLines = 2,
+                            overflow = TextOverflow.Ellipsis,
+                            modifier = Modifier.padding(horizontal = 4.dp, vertical = 4.dp),
+                            textAlign = TextAlign.Center
+                        )
+                        Text(
+                            text = char.role,
+                            fontSize = 9.sp,
+                            color = SilverDark,
+                            modifier = Modifier.padding(bottom = 4.dp)
+                        )
+                    }
+                }
+            }
+        }
+    }
+}
+
+@Composable
+private fun RelationsSection(relations: List<AniListRelationEntry>) {
+    Column(modifier = Modifier.padding(horizontal = 16.dp)) {
+        SectionTitle("Relations")
+        Spacer(modifier = Modifier.height(12.dp))
+        LazyRow(horizontalArrangement = Arrangement.spacedBy(10.dp)) {
+            items(relations) { rel ->
+                Card(
+                    modifier = Modifier.width(130.dp),
+                    shape = RoundedCornerShape(12.dp),
+                    colors = CardDefaults.cardColors(containerColor = DarkCard),
+                    border = BorderStroke(0.5.dp, GlassStroke),
+                    elevation = CardDefaults.cardElevation(defaultElevation = 0.dp)
+                ) {
+                    Column {
+                        Box(modifier = Modifier.fillMaxWidth().aspectRatio(0.7f).background(DarkSurfaceVariant)) {
+                            if (rel.coverUrl != null) {
+                                AsyncImage(
+                                    model = rel.coverUrl,
+                                    contentDescription = rel.title,
+                                    modifier = Modifier.fillMaxSize(),
+                                    contentScale = ContentScale.Crop
+                                )
+                            }
+                        }
+                        Column(modifier = Modifier.padding(6.dp)) {
+                            Text(
+                                text = formatRelationType(rel.relationType),
+                                fontSize = 9.sp,
+                                color = BlueAccent,
+                                fontWeight = FontWeight.SemiBold,
+                                letterSpacing = 0.5.sp,
+                                maxLines = 1
+                            )
+                            Spacer(Modifier.height(2.dp))
+                            Text(
+                                text = rel.title,
+                                fontSize = 11.sp,
+                                color = SilverLight,
+                                fontWeight = FontWeight.Medium,
+                                maxLines = 1,
+                                overflow = TextOverflow.Ellipsis
+                            )
+                        }
+                    }
+                }
+            }
+        }
+    }
+}
+
+@Composable
+private fun RankingsSection(rankings: List<AniListRankingEntry>) {
+    Column(modifier = Modifier.padding(horizontal = 16.dp)) {
+        SectionTitle("Rankings")
+        Spacer(modifier = Modifier.height(12.dp))
+        FlowRow(
+            horizontalArrangement = Arrangement.spacedBy(8.dp),
+            verticalArrangement = Arrangement.spacedBy(6.dp)
+        ) {
+            rankings.take(6).forEach { ranking ->
+                val color = when {
+                    ranking.rank <= 10 -> Color(0xFFfbbf24)
+                    ranking.rank <= 100 -> BlueLight
+                    else -> SilverDark
+                }
+                Box(
+                    modifier = Modifier
+                        .clip(RoundedCornerShape(12.dp))
+                        .background(color.copy(alpha = 0.1f))
+                        .border(0.5.dp, color.copy(alpha = 0.3f), RoundedCornerShape(12.dp))
+                        .padding(horizontal = 12.dp, vertical = 6.dp)
+                ) {
+                    Column {
+                        Text(
+                            text = "#${ranking.rank}",
+                            color = color,
+                            fontWeight = FontWeight.Bold,
+                            fontSize = 16.sp
+                        )
+                        Text(
+                            text = ranking.context + if (ranking.allTime) " (All Time)" else "",
+                            color = color.copy(alpha = 0.7f),
+                            fontSize = 10.sp,
+                            maxLines = 1
+                        )
+                    }
+                }
+            }
+        }
+    }
+}
+
+@Composable
+private fun RecommendationsSection(recommendations: List<AniListSearchResult>) {
+    Column(modifier = Modifier.padding(horizontal = 16.dp)) {
+        SectionTitle("Recommendations")
+        Spacer(modifier = Modifier.height(12.dp))
+        LazyRow(horizontalArrangement = Arrangement.spacedBy(10.dp)) {
+            items(recommendations) { rec ->
+                Card(
+                    modifier = Modifier.width(120.dp),
+                    shape = RoundedCornerShape(12.dp),
+                    colors = CardDefaults.cardColors(containerColor = DarkCard),
+                    border = BorderStroke(0.5.dp, GlassStroke),
+                    elevation = CardDefaults.cardElevation(defaultElevation = 0.dp)
+                ) {
+                    Column {
+                        Box(modifier = Modifier.fillMaxWidth().aspectRatio(0.7f).background(DarkSurfaceVariant)) {
+                            if (rec.coverUrl != null) {
+                                AsyncImage(
+                                    model = rec.coverUrl,
+                                    contentDescription = rec.title,
+                                    modifier = Modifier.fillMaxSize(),
+                                    contentScale = ContentScale.Crop
+                                )
+                            }
+                        }
+                        Column(modifier = Modifier.padding(6.dp)) {
+                            Text(
+                                text = rec.title,
+                                fontSize = 11.sp,
+                                color = SilverLight,
+                                fontWeight = FontWeight.Medium,
+                                maxLines = 2,
+                                overflow = TextOverflow.Ellipsis
+                            )
+                            if (rec.meanScore != null) {
+                                Row(verticalAlignment = Alignment.CenterVertically) {
+                                    Icon(Icons.Default.Star, contentDescription = null, tint = Color(0xFFfbbf24), modifier = Modifier.size(10.dp))
+                                    Spacer(Modifier.width(2.dp))
+                                    Text(
+                                        text = "${rec.meanScore / 10f}",
+                                        fontSize = 10.sp,
+                                        color = Color(0xFFfbbf24)
+                                    )
+                                }
+                            }
+                        }
+                    }
+                }
+            }
+        }
+    }
+}
+
+@Composable
+private fun StaffSection(staff: List<AniListStaffEntry>) {
+    Column(modifier = Modifier.padding(horizontal = 16.dp)) {
+        SectionTitle("Staff")
+        Spacer(modifier = Modifier.height(12.dp))
+        FlowRow(
+            horizontalArrangement = Arrangement.spacedBy(8.dp),
+            verticalArrangement = Arrangement.spacedBy(8.dp)
+        ) {
+            staff.forEach { entry ->
+                Row(
+                    verticalAlignment = Alignment.CenterVertically,
+                    modifier = Modifier
+                        .clip(RoundedCornerShape(10.dp))
+                        .background(DarkSurfaceVariant.copy(alpha = 0.4f))
+                        .padding(horizontal = 10.dp, vertical = 6.dp)
+                ) {
+                    if (entry.image != null) {
+                        AsyncImage(
+                            model = entry.image,
+                            contentDescription = null,
+                            modifier = Modifier.size(28.dp).clip(CircleShape),
+                            contentScale = ContentScale.Crop
+                        )
+                        Spacer(Modifier.width(8.dp))
+                    }
+                    Column {
+                        Text(entry.name, fontSize = 12.sp, color = SilverLight, fontWeight = FontWeight.Medium, maxLines = 1, overflow = TextOverflow.Ellipsis)
+                        Text(entry.role, fontSize = 10.sp, color = SilverDark)
+                    }
+                }
+            }
+        }
+    }
+}
+
+@Composable
+private fun SynonymsSection(synonyms: List<String>) {
+    Column(modifier = Modifier.padding(horizontal = 16.dp)) {
+        SectionTitle("Also Known As")
+        Spacer(modifier = Modifier.height(10.dp))
+        Text(
+            text = synonyms.joinToString("  ·  "),
+            color = SilverDark,
+            fontSize = 13.sp,
+            lineHeight = 20.sp
+        )
+    }
+}
+
+@Composable
+private fun SynopsisSection(description: String) {
+    Column(modifier = Modifier.padding(horizontal = 16.dp)) {
+        SectionTitle("Synopsis")
+        Spacer(modifier = Modifier.height(10.dp))
+        Text(
+            text = description.replace(Regex("<[^>]*>"), ""),
+            color = SilverLight.copy(alpha = 0.85f),
+            fontSize = 14.sp,
+            lineHeight = 22.sp
+        )
+    }
+}
+
+@Composable
+private fun ExternalLinksSection(links: List<com.blissless.oni.data.AniListExternalLink>) {
+    Column(modifier = Modifier.padding(horizontal = 16.dp)) {
+        SectionTitle("External Links")
+        Spacer(modifier = Modifier.height(12.dp))
+        FlowRow(
+            horizontalArrangement = Arrangement.spacedBy(8.dp),
+            verticalArrangement = Arrangement.spacedBy(6.dp)
+        ) {
+            links.forEach { link ->
+                Row(
+                    modifier = Modifier
+                        .clip(RoundedCornerShape(8.dp))
+                        .background(BlueAccent.copy(alpha = 0.1f))
+                        .border(0.5.dp, BlueAccent.copy(alpha = 0.3f), RoundedCornerShape(8.dp))
+                        .padding(horizontal = 10.dp, vertical = 5.dp),
+                    verticalAlignment = Alignment.CenterVertically
+                ) {
+                    Icon(Icons.Default.Link, contentDescription = null, tint = BlueLight, modifier = Modifier.size(12.dp))
+                    Spacer(Modifier.width(6.dp))
+                    Text(link.site, fontSize = 11.sp, color = BlueLight, fontWeight = FontWeight.Medium)
+                }
+            }
+        }
+    }
+}
+
+@Composable
+private fun SectionDivider() {
+    HorizontalDivider(color = GlassStroke, modifier = Modifier.padding(horizontal = 16.dp))
+}
+
+@Composable
+private fun SectionTitle(text: String) {
+    Text(text, color = Color.White, fontWeight = FontWeight.Bold, fontSize = 14.sp, letterSpacing = 0.8.sp)
 }
 
 @Composable
@@ -802,4 +1232,74 @@ fun ChapterProgressDialog(
             }
         }
     )
+}
+
+// ======================== Utility Functions ========================
+
+private fun formatLabel(format: String?): String? = when (format?.uppercase()) {
+    "MANGA" -> "Manga"
+    "NOVEL" -> "Light Novel"
+    "ONE_SHOT" -> "One-Shot"
+    "DOUJIN" -> "Doujin"
+    "MANGA_KEN" -> "Manga"
+    else -> format
+}
+
+private fun formatStatus(status: String?): String = when (status?.uppercase()) {
+    "RELEASING" -> "Ongoing"
+    "FINISHED" -> "Completed"
+    "NOT_YET_RELEASED" -> "Not Released"
+    "CANCELLED" -> "Cancelled"
+    "HIATUS" -> "On Hiatus"
+    else -> status ?: ""
+}
+
+private fun formatSource(source: String?): String = when (source?.uppercase()) {
+    "ORIGINAL" -> "Original"
+    "MANGA" -> "Manga"
+    "LIGHT_NOVEL" -> "Light Novel"
+    "VISUAL_NOVEL" -> "Visual Novel"
+    "WEB_MANGA" -> "Web Manga"
+    "NOVEL" -> "Novel"
+    "DOUJIN" -> "Doujin"
+    "GAME" -> "Game"
+    "ANIME" -> "Anime"
+    "OTHER" -> "Other"
+    else -> source ?: "Unknown"
+}
+
+private fun formatRelationType(type: String?): String = when (type?.uppercase()) {
+    "SEQUEL" -> "Sequel"
+    "PREQUEL" -> "Prequel"
+    "ALTERNATIVE" -> "Alternative"
+    "SIDE_STORY" -> "Side Story"
+    "SPIN_OFF" -> "Spin-off"
+    "SUMMARY" -> "Summary"
+    "COMPILATION" -> "Compilation"
+    "CHARACTER" -> "Character"
+    "OTHER" -> "Related"
+    else -> type ?: "Related"
+}
+
+private fun formatNumber(num: Int): String {
+    return when {
+        num >= 1_000_000 -> String.format("%.1fM", num / 1_000_000f)
+        num >= 1_000 -> String.format("%.1fK", num / 1_000f)
+        else -> num.toString()
+    }
+}
+
+private fun formatDate(year: Int?, month: Int?, day: Int?): String {
+    val y = if (year != null && year > 0) year else return "?"
+    return if (month != null && month in 1..12 && day != null && day in 1..31) {
+        "${getMonthAbbr(month)} $day, $y"
+    } else {
+        "$y"
+    }
+}
+
+private fun getMonthAbbr(month: Int): String = when (month) {
+    1 -> "Jan"; 2 -> "Feb"; 3 -> "Mar"; 4 -> "Apr"; 5 -> "May"; 6 -> "Jun"
+    7 -> "Jul"; 8 -> "Aug"; 9 -> "Sep"; 10 -> "Oct"; 11 -> "Nov"; 12 -> "Dec"
+    else -> "?"
 }

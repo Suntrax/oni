@@ -140,7 +140,7 @@ fun ReaderScreen(
 
             val currentScroll = listState.firstVisibleItemIndex.toFloat() * itemSize.toFloat() + listState.firstVisibleItemScrollOffset.toFloat()
             val maxScroll = (totalItems.toFloat() * itemSize.toFloat() - viewportHeight.toFloat()).coerceAtLeast(0f)
-            (currentScroll / maxScroll).coerceIn(0f, 1f)
+            if (maxScroll <= 0f) 0f else (currentScroll / maxScroll).coerceIn(0f, 1f)
         }.collect { progress: Float ->
             scrollProgress = progress
             viewModel.onChapterScrollProgress(progress)

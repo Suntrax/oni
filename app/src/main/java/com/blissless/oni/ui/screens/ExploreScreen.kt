@@ -24,9 +24,12 @@ import androidx.compose.foundation.pager.HorizontalPager
 import androidx.compose.foundation.pager.rememberPagerState
 import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.shape.RoundedCornerShape
+import androidx.compose.material.icons.Icons
+import androidx.compose.material.icons.filled.Star
 import androidx.compose.material3.Card
 import androidx.compose.material3.CardDefaults
 import androidx.compose.material3.CircularProgressIndicator
+import androidx.compose.material3.Icon
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
@@ -46,8 +49,8 @@ import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import coil.compose.AsyncImage
-import com.blissless.oni.data.HomeSection
-import com.blissless.oni.data.MangaSearchResult
+import com.blissless.oni.data.AniListSearchResult
+import com.blissless.oni.data.ExploreSection
 import com.blissless.oni.ui.theme.BlueAccent
 import com.blissless.oni.ui.theme.BlueLight
 import com.blissless.oni.ui.theme.DarkBackground
@@ -63,14 +66,14 @@ import kotlinx.coroutines.delay
 @Composable
 fun ExploreScreen(
     viewModel: MainViewModel,
-    onMangaSelected: (MangaSearchResult) -> Unit
+    onMangaSelected: (AniListSearchResult) -> Unit
 ) {
-    val sections by viewModel.homeSections.collectAsState()
+    val sections by viewModel.exploreSections.collectAsState()
     val isLoading by viewModel.isLoading.collectAsState()
 
     LaunchedEffect(Unit) {
         if (sections.isEmpty()) {
-            viewModel.loadHomePage()
+            viewModel.loadExplorePage()
         }
     }
 
@@ -81,25 +84,34 @@ fun ExploreScreen(
         ) {
             CircularProgressIndicator(color = BlueAccent)
         }
+    } else if (sections.isEmpty()) {
+        Box(
+            modifier = Modifier.fillMaxSize(),
+            contentAlignment = Alignment.Center
+        ) {
+            Column(horizontalAlignment = Alignment.CenterHorizontally) {
+                Text("No manga found", color = SilverDark, fontSize = 15.sp)
+                Spacer(modifier = Modifier.height(8.dp))
+                Text("Check your internet connection", color = SilverDark.copy(alpha = 0.5f), fontSize = 13.sp)
+            }
+        }
     } else {
         LazyColumn(
             modifier = Modifier.fillMaxSize(),
             contentPadding = PaddingValues(bottom = 96.dp)
         ) {
-            val carouselSections = sections.filter { it.layout == "carousel" }
+            val trending = sections.firstOrNull { it.key == "trending" }
 
-            if (carouselSections.isNotEmpty()) {
+            if (trending != null) {
                 item {
                     FeaturedCarousel(
-                        section = carouselSections.first(),
+                        section = trending,
                         onMangaClick = onMangaSelected
                     )
                 }
             }
 
-            sections.filter {
-                it.layout == "carousel" && it.key != carouselSections.firstOrNull()?.key
-            }.forEach { section ->
+            sections.filter { it.key != "trending" }.forEach { section ->
                 item {
                     SectionRow(
                         section = section,
@@ -113,8 +125,8 @@ fun ExploreScreen(
 
 @Composable
 fun FeaturedCarousel(
-    section: HomeSection,
-    onMangaClick: (MangaSearchResult) -> Unit
+    section: ExploreSection,
+    onMangaClick: (AniListSearchResult) -> Unit
 ) {
     val actualCount = section.items.size
     val pagerState = rememberPagerState(
@@ -181,7 +193,7 @@ fun FeaturedCarousel(
 
 @Composable
 fun FeaturedCard(
-    manga: MangaSearchResult,
+    manga: AniListSearchResult,
     onClick: () -> Unit,
     isActive: Boolean
 ) {
@@ -242,13 +254,33 @@ fun FeaturedCard(
                     .align(Alignment.BottomStart)
                     .padding(20.dp)
             ) {
-                Text(
-                    text = "Featured",
-                    fontSize = 11.sp,
-                    fontWeight = FontWeight.SemiBold,
-                    color = BlueAccent,
-                    letterSpacing = 1.sp
-                )
+                Row(verticalAlignment = Alignment.CenterVertically) {
+                    Text(
+                        text = "Trending",
+                        fontSize = 11.sp,
+                        fontWeight = FontWeight.SemiBold,
+                        color = BlueAccent,
+                        letterSpacing = 1.sp
+                    )
+                    if (manga.meanScore != null) {
+                        Spacer(modifier = Modifier.width(12.dp))
+                        Row(verticalAlignment = Alignment.CenterVertically) {
+                            Icon(
+                                Icons.Default.Star,
+                                contentDescription = null,
+                                tint = Color(0xFFfbbf24),
+                                modifier = Modifier.size(14.dp)
+                            )
+                            Spacer(modifier = Modifier.width(3.dp))
+                            Text(
+                                text = "${(manga.meanScore!! / 10f)}",
+                                color = Color(0xFFfbbf24),
+                                fontSize = 12.sp,
+                                fontWeight = FontWeight.SemiBold
+                            )
+                        }
+                    }
+                }
                 Spacer(modifier = Modifier.height(6.dp))
                 Text(
                     text = manga.title,
@@ -259,11 +291,20 @@ fun FeaturedCard(
                     overflow = TextOverflow.Ellipsis
                 )
                 Spacer(modifier = Modifier.height(4.dp))
-                Text(
-                    text = "Tap to explore",
-                    fontSize = 13.sp,
-                    color = SilverLight.copy(alpha = 0.8f)
-                )
+                val subtitle = buildString {
+                    manga.format?.let { append(formatLabel(it)) }
+                    if (manga.genres != null && manga.genres!!.isNotEmpty()) {
+                        if (isNotEmpty()) append("  ·  ")
+                        append(manga.genres!!.take(3).joinToString(", "))
+                    }
+                }
+                if (subtitle.isNotBlank()) {
+                    Text(
+                        text = subtitle,
+                        fontSize = 13.sp,
+                        color = SilverLight.copy(alpha = 0.8f)
+                    )
+                }
             }
         }
     }
@@ -271,8 +312,8 @@ fun FeaturedCard(
 
 @Composable
 fun SectionRow(
-    section: HomeSection,
-    onMangaClick: (MangaSearchResult) -> Unit
+    section: ExploreSection,
+    onMangaClick: (AniListSearchResult) -> Unit
 ) {
     Column {
         Row(
@@ -313,7 +354,7 @@ fun SectionRow(
 
 @Composable
 fun MangaSmallCard(
-    manga: MangaSearchResult,
+    manga: AniListSearchResult,
     onClick: () -> Unit
 ) {
     Card(
@@ -360,6 +401,26 @@ fun MangaSmallCard(
                         )
                         .align(Alignment.BottomCenter)
                 )
+
+                if (manga.meanScore != null) {
+                    Row(
+                        modifier = Modifier
+                            .align(Alignment.TopStart)
+                            .padding(6.dp)
+                            .background(Color.Black.copy(alpha = 0.7f), RoundedCornerShape(4.dp))
+                            .padding(horizontal = 4.dp, vertical = 2.dp),
+                        verticalAlignment = Alignment.CenterVertically
+                    ) {
+                        Icon(Icons.Default.Star, contentDescription = null, tint = Color(0xFFfbbf24), modifier = Modifier.size(10.dp))
+                        Spacer(Modifier.width(2.dp))
+                        Text(
+                            text = "${(manga.meanScore!! / 10f)}",
+                            color = Color(0xFFfbbf24),
+                            fontSize = 10.sp,
+                            fontWeight = FontWeight.Bold
+                        )
+                    }
+                }
             }
             Box(
                 modifier = Modifier
@@ -381,4 +442,12 @@ fun MangaSmallCard(
             }
         }
     }
+}
+
+private fun formatLabel(format: String?): String = when (format?.uppercase()) {
+    "MANGA" -> "Manga"
+    "NOVEL" -> "Light Novel"
+    "ONE_SHOT" -> "One-Shot"
+    "DOUJIN" -> "Doujin"
+    else -> format ?: ""
 }

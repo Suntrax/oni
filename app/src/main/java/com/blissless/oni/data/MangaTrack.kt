@@ -5,7 +5,7 @@ data class MangaTrack(
     val title: String,
     val coverUrl: String?,
     val currentChapterIndex: Int,
-    val currentChapterNumber: Int = 0,
+    val currentChapterNumber: Int = -1,
     val currentChapterUrl: String,
     val totalChapters: Int,
     val status: ReadingStatus,
