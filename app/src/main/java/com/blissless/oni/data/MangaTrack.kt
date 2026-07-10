@@ -12,7 +12,18 @@ data class MangaTrack(
     val lastReadTimestamp: Long,
     val mangaUrl: String,
     val anilistMediaId: Int? = null,
-    val scrollProgress: Float = 0f
+    val scrollProgress: Float = 0f,
+    /**
+     * Cached MangaDex manga UUID. We look this up once via [MangaDexManager.findMangaByAniListId]
+     * and store it so subsequent opens skip the title search and go straight to the
+     * aggregate endpoint.
+     */
+    val mangaDexId: String? = null,
+    /**
+     * Total volume count from MangaDex. Cached alongside [mangaDexId] so the
+     * manga detail screen can show a volume count even when AniList has none.
+     */
+    val mangaDexVolumeCount: Int? = null
 )
 
 enum class ReadingStatus {

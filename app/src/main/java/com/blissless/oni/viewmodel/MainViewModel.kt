@@ -15,6 +15,7 @@ import com.blissless.oni.data.AniListSearchResult
 import com.blissless.oni.data.ChapterInfo
 import com.blissless.oni.data.ChapterImages
 import com.blissless.oni.data.ExploreSection
+import com.blissless.oni.data.MangaDexAggregate
 import com.blissless.oni.data.MangaDexManager
 import com.blissless.oni.data.MangaSearchResult
 import com.blissless.oni.data.MangaTrack
@@ -46,6 +47,25 @@ data class InstalledExtension(val label: String, val packageName: String) {
     val authority: String get() = "$packageName.provider"
 }
 
+/**
+ * A single chapter entry returned by the extension's `/chapters` endpoint.
+ *
+ * The extension (e.g. atsumaru-extension) searches its source (atsu.moe) for
+ * the manga and returns the full chapter list. Each entry has:
+ *   - number:   chapter number as a string (e.g. "1", "1.5", "346.2")
+ *   - title:    chapter title (may be empty)
+ *   - id:       the extension's internal chapter ID (used for image fetching)
+ *   - index:    0-based position in the extension's list
+ *   - pageCount: number of pages (0 if unknown)
+ */
+data class ExtensionChapter(
+    val number: String,
+    val title: String,
+    val id: String,
+    val index: Int,
+    val pageCount: Int
+)
+
 class MainViewModel(private val context: Context) : ViewModel() {
 
     private val trackingManager = TrackingManager(context)
@@ -76,6 +96,32 @@ class MainViewModel(private val context: Context) : ViewModel() {
 
     private val _mangaDetail = MutableStateFlow<AniListMangaDetail?>(null)
     val mangaDetail: StateFlow<AniListMangaDetail?> = _mangaDetail.asStateFlow()
+
+    /**
+     * Total volume count for the currently-selected manga.
+     *
+     * Sources, in priority order:
+     *   1. AniList `volumes` field (already exposed via [mangaDetail])
+     *   2. MangaDex aggregate volume count (populated here)
+     *   3. Cached value on the persisted [MangaTrack]
+     *
+     * The manga detail screen reads this when [AniListMangaDetail.volumes] is null.
+     */
+    private val _mangaDexVolumeCount = MutableStateFlow<Int?>(null)
+    val mangaDexVolumeCount: StateFlow<Int?> = _mangaDexVolumeCount.asStateFlow()
+
+    /**
+     * Total chapter count from MangaDex. Used by the detail screen when
+     * [AniListMangaDetail.chapters] is null (which happens for many ongoing manga).
+     */
+    private val _mangaDexChapterCount = MutableStateFlow<Int?>(null)
+    val mangaDexChapterCount: StateFlow<Int?> = _mangaDexChapterCount.asStateFlow()
+
+    /**
+     * The MangaDex manga UUID for the currently-selected manga. Cached here so we
+     * don't re-query the title-search endpoint on every chapter refresh.
+     */
+    private var currentMangaDexId: String? = null
 
     private val _selectedChapterIndex = MutableStateFlow(-1)
     val selectedChapterIndex: StateFlow<Int> = _selectedChapterIndex.asStateFlow()
@@ -165,6 +211,10 @@ class MainViewModel(private val context: Context) : ViewModel() {
                 syncAnilistManga()
             }
         }
+        // Pre-load the explore page on app start so it's ready by the time the
+        // user swipes to the Explore tab. Previously this only loaded when the
+        // user first opened ExploreScreen, causing a visible loading spinner.
+        loadExplorePage()
     }
 
     fun setCheckUpdatesOnStart(enabled: Boolean) {
@@ -255,7 +305,12 @@ class MainViewModel(private val context: Context) : ViewModel() {
         trackingManager.markAsPlanning(mangaId, title, coverUrl, mangaUrl, totalChapters)
         refreshTrackingLists()
         val track = trackingManager.getMangaTracking(mangaId)
-        if (track != null) updateAnilistProgressNow(track)
+        if (track != null) {
+            updateAnilistProgressNow(track)
+            // If AniList didn't give us a chapter count, ask MangaDex in the
+            // background so the home screen card shows the right total.
+            if (totalChapters <= 0) refreshMangaDexChapterCountForTrack(track)
+        }
     }
 
     fun removeFromPlanning(mangaId: String) {
@@ -272,7 +327,36 @@ class MainViewModel(private val context: Context) : ViewModel() {
         trackingManager.markAsReading(mangaId, title, coverUrl, mangaUrl, totalChapters, resetProgress)
         refreshTrackingLists()
         val track = trackingManager.getMangaTracking(mangaId)
-        if (track != null) updateAnilistProgressNow(track)
+        if (track != null) {
+            updateAnilistProgressNow(track)
+            if (totalChapters <= 0) refreshMangaDexChapterCountForTrack(track)
+        }
+    }
+
+    /**
+     * Refresh the MangaDex chapter + volume count for a single track.
+     * Fire-and-forget; updates the persisted track and the home screen state
+     * when the lookup succeeds.
+     */
+    fun refreshMangaDexChapterCountForTrack(track: MangaTrack) {
+        viewModelScope.launch {
+            val mediaId = track.anilistMediaId ?: extractAnilistMediaId(track.mangaId)
+            val aggregate = if (mediaId != null) {
+                mangaDexManager.fetchAggregateForAniList(track.title, mediaId)
+            } else {
+                mangaDexManager.fetchAggregateForTitle(track.title)
+            }
+            if (aggregate != null && aggregate.totalChapters > 0) {
+                val updated = track.copy(
+                    totalChapters = aggregate.totalChapters,
+                    mangaDexId = aggregate.mangaId,
+                    mangaDexVolumeCount = aggregate.totalVolumes
+                )
+                trackingManager.updateTracking(updated)
+                refreshTrackingLists()
+                Log.d("MANGADEX", "Refreshed single track '${track.title}': ${aggregate.totalChapters} chapters")
+            }
+        }
     }
 
     fun togglePlanning(mangaId: String, title: String, coverUrl: String?, mangaUrl: String, totalChapters: Int) {
@@ -300,6 +384,9 @@ class MainViewModel(private val context: Context) : ViewModel() {
             )
             trackingManager.updateTracking(updated)
             updateAnilistProgressNow(updated)
+            // If we don't have a chapter count yet, fetch one from MangaDex so
+            // the home screen card shows the right "Ch. X / Y" total.
+            if (updated.totalChapters <= 0) refreshMangaDexChapterCountForTrack(updated)
         } else {
             val detail = _mangaDetail.value
             val track = MangaTrack(
@@ -317,6 +404,7 @@ class MainViewModel(private val context: Context) : ViewModel() {
             )
             trackingManager.updateTracking(track)
             updateAnilistProgressNow(track)
+            if (track.totalChapters <= 0) refreshMangaDexChapterCountForTrack(track)
         }
         refreshTrackingLists()
     }
@@ -344,6 +432,7 @@ class MainViewModel(private val context: Context) : ViewModel() {
         currentMangaUrl = "https://anilist.co/manga/${manga.id}"
         currentMediaId = manga.id
         _mangaDetail.value = null
+        clearMangaDexState()
         _isLoading.value = true
 
         viewModelScope.launch {
@@ -363,6 +452,7 @@ class MainViewModel(private val context: Context) : ViewModel() {
             currentMangaUrl = "https://anilist.co/manga/$mediaId"
             currentMediaId = mediaId
             _mangaDetail.value = null
+            clearMangaDexState()
             _isLoading.value = true
 
             viewModelScope.launch {
@@ -425,45 +515,215 @@ class MainViewModel(private val context: Context) : ViewModel() {
         _isLoading.value = false
     }
 
+    /**
+     * Build a synthetic chapter list when we have a chapter count but no MangaDex
+     * aggregate (e.g. MangaDex lookup failed entirely).
+     *
+     * These chapters use the legacy `anilist_<mediaId>_ch_<n>` URL scheme and can
+     * only be loaded via an installed extension. They exist so the user at least
+     * sees a chapter count and can use the "Set Progress" dialog.
+     */
     private fun generateChapterList(mediaId: Int, totalChapters: Int): List<ChapterInfo> {
         if (totalChapters <= 0) return emptyList()
+        // Oldest-first: chapter 1 at index 0, chapter N at the end.
         return (1..totalChapters).map { i ->
             ChapterInfo(url = "anilist_${mediaId}_ch_$i", title = "Chapter $i")
-        }.reversed()
+        }
     }
 
+    /**
+     * Resolve the total chapter count for the current manga.
+     *
+     * Priority:
+     *   1. AniList `chapters` field (authoritative when present)
+     *   2. MangaDex aggregate total (queried regardless of manga status - completed
+     *      manga are also missing chapter counts on AniList surprisingly often)
+     *   3. Cached value on the persisted [MangaTrack]
+     *
+     * Side effect: also populates [_mangaDexChapterCount], [_mangaDexVolumeCount],
+     * and [currentMangaDexId] when the MangaDex lookup succeeds, and persists
+     * the cache onto the tracking entry so we skip the lookup next time.
+     */
     private suspend fun resolveChapterCount(mediaId: Int): Int {
         val detail = _mangaDetail.value
         val mangaId = currentMangaId
         val tracking = mangaId?.let { trackingManager.getMangaTracking(it) }
 
-        if (detail?.chapters != null) return detail.chapters
+        // 1. AniList is authoritative when it has a value.
+        if (detail?.chapters != null && detail.chapters > 0) return detail.chapters
 
-        val isOngoing = detail?.status == "RELEASING"
-
-        if (isOngoing) {
-            val title = detail?.titleEnglish ?: detail?.titleRomaji ?: currentMangaTitle
-            if (title != null) {
-                val mdChapters = mangaDexManager.getChapterCount(title, mediaId)
-                if (mdChapters != null && mdChapters > 0) {
-                    mangaId?.let { trackingManager.updateTotalChapters(it, mdChapters) }
-                    return mdChapters
+        // 2. Try MangaDex. Use cached UUID if we have one, otherwise look it up.
+        val title = detail?.titleEnglish?.takeIf { it.isNotBlank() }
+            ?: detail?.titleRomaji?.takeIf { it.isNotBlank() }
+            ?: currentMangaTitle
+        if (title != null) {
+            val cachedMdId = currentMangaDexId ?: tracking?.mangaDexId
+            val aggregate = if (cachedMdId != null) {
+                mangaDexManager.fetchAggregate(cachedMdId)
+            } else {
+                mangaDexManager.fetchAggregateForAniList(title, mediaId)
+            }
+            if (aggregate != null && aggregate.totalChapters > 0) {
+                currentMangaDexId = aggregate.mangaId
+                _mangaDexChapterCount.value = aggregate.totalChapters
+                _mangaDexVolumeCount.value = aggregate.totalVolumes
+                mangaId?.let { mid ->
+                    trackingManager.updateTotalChapters(mid, aggregate.totalChapters)
+                    cacheMangaDexMetadata(mid, aggregate.mangaId, aggregate.totalVolumes)
                 }
+                return aggregate.totalChapters
             }
         }
 
+        // 3. Fall back to whatever we have cached locally.
         return tracking?.totalChapters ?: 0
     }
 
+    /**
+     * Persist the MangaDex UUID + volume count onto the tracking entry so we can
+     * skip the title-search lookup on subsequent opens.
+     */
+    private fun cacheMangaDexMetadata(mangaId: String, mangaDexId: String, volumeCount: Int) {
+        val existing = trackingManager.getMangaTracking(mangaId) ?: return
+        if (existing.mangaDexId == mangaDexId && existing.mangaDexVolumeCount == volumeCount) return
+        trackingManager.updateTracking(
+            existing.copy(
+                mangaDexId = mangaDexId,
+                mangaDexVolumeCount = volumeCount
+            )
+        )
+    }
+
+    /**
+     * Resolve the chapter list for the current manga.
+     *
+     * Two sources are queried in parallel:
+     *   - MangaDex aggregate → latest chapter number + volume count (for the
+     *     detail screen's StatsCard and the home screen's "Ch. X / Y" label).
+     *   - Extension `/chapters` → the actual chapter list shown in the chapter
+     *     selection screen. Each entry becomes a [ChapterInfo] with an
+     *     `anilist_<mediaId>_ch_<number>` URL that [loadChapterImages] routes
+     *     to the extension for image fetching.
+     *
+     * Both lists are logged to Logcat (tag "CHAPTERS") so you can compare them.
+     *
+     * If the extension is not selected or returns nothing, falls back to a
+     * synthetic 1..N list from the AniList/MangaDex count (all greyed out).
+     *
+     * Shared by [loadAniListChapters], [continueFromTracking], [resumeFromTracking],
+     * and [continueFromCurrentManga].
+     */
+    private suspend fun resolveChapterList(mediaId: Int, mangaId: String?): List<ChapterInfo> {
+        val detail = _mangaDetail.value
+        val tracking = mangaId?.let { trackingManager.getMangaTracking(it) }
+        val title = detail?.titleEnglish?.takeIf { it.isNotBlank() }
+            ?: detail?.titleRomaji?.takeIf { it.isNotBlank() }
+            ?: currentMangaTitle
+
+        log("CHAPTERS", "=== RESOLVE CHAPTER LIST ===")
+        log("CHAPTERS", "Manga: '$title' (mediaId=$mediaId, mangaId=$mangaId)")
+        log("CHAPTERS", "AniList chapters: ${detail?.chapters}")
+        log("CHAPTERS", "AniList volumes: ${detail?.volumes}")
+        log("CHAPTERS", "Extension authority: ${_selectedExtensionAuthority.value}")
+
+        // --- 1. Fetch MangaDex aggregate for latest chapter + volume count ---
+        var mdLatestChapter: Int? = null
+        var mdVolumeCount: Int? = null
+        if (title != null) {
+            val cachedMdId = currentMangaDexId ?: tracking?.mangaDexId
+            val aggregate: MangaDexAggregate? = if (cachedMdId != null) {
+                mangaDexManager.fetchAggregate(cachedMdId)
+            } else {
+                mangaDexManager.fetchAggregateForAniList(title, mediaId)
+            }
+            if (aggregate != null && aggregate.totalChapters > 0) {
+                currentMangaDexId = aggregate.mangaId
+                mdLatestChapter = aggregate.totalChapters
+                mdVolumeCount = aggregate.totalVolumes
+                _mangaDexChapterCount.value = mdLatestChapter
+                _mangaDexVolumeCount.value = mdVolumeCount
+                if (mangaId != null) {
+                    cacheMangaDexMetadata(mangaId, aggregate.mangaId, aggregate.totalVolumes)
+                }
+                log("CHAPTERS", "=== MANGADEX (count only) ===")
+                log("CHAPTERS", "MangaDex latest chapter: $mdLatestChapter")
+                log("CHAPTERS", "MangaDex volume count: $mdVolumeCount")
+            } else {
+                log("CHAPTERS", "MangaDex aggregate was null or empty")
+            }
+        }
+
+        // --- 2. Fetch the extension's chapter list (the actual list to show) ---
+        if (title != null) {
+            val extChapters = fetchExtensionChapterList(title)
+            if (extChapters != null && extChapters.isNotEmpty()) {
+                log("CHAPTERS", "=== EXTENSION CHAPTER LIST (atsu.moe) ===")
+                log("CHAPTERS", "Extension returned ${extChapters.size} chapters")
+
+                // Build ChapterInfo list from the extension's response.
+                // Oldest-first (index 0 = chapter 1) so read-progress indexing works.
+                val result = extChapters
+                    .sortedBy { it.index }
+                    .map { ch ->
+                        val display = ch.number
+                        ChapterInfo(
+                            url = "anilist_${mediaId}_ch_${ch.number}",
+                            title = if (ch.title.isNotBlank()) "Chapter $display: ${ch.title}" else "Chapter $display"
+                        )
+                    }
+
+                // Use the extension's count for tracking, but prefer MangaDex's
+                // volume count if available.
+                val totalCount = extChapters.size
+                if (mangaId != null) {
+                    trackingManager.updateTotalChapters(mangaId, totalCount)
+                }
+
+                // === COMPARISON: Log all counts side by side ===
+                log("CHAPTERS", "=== COMPARISON ===")
+                log("CHAPTERS", "AniList chapters: ${detail?.chapters ?: "null"}")
+                log("CHAPTERS", "MangaDex latest chapter: $mdLatestChapter")
+                log("CHAPTERS", "MangaDex volumes: $mdVolumeCount")
+                log("CHAPTERS", "Extension chapters: $totalCount")
+                if (mdLatestChapter != null && mdLatestChapter != totalCount) {
+                    log("CHAPTERS", "NOTE: MangaDex latest ($mdLatestChapter) != extension count ($totalCount)")
+                }
+
+                log("CHAPTERS", "=== FINAL CHAPTER LIST (from extension) ===")
+                log("CHAPTERS", "Total entries: ${result.size}")
+                log("CHAPTERS", "First 5: ${result.take(5).map { it.title }}")
+                log("CHAPTERS", "Last 5: ${result.takeLast(5).map { it.title }}")
+                return result
+            } else {
+                log("CHAPTERS", "Extension returned no chapters (not selected or manga not found)")
+            }
+        }
+
+        // --- 3. Fallback: synthetic chapter list from the best available count ---
+        // Prefer AniList, then MangaDex latest, then cached tracking value.
+        val fallbackTotal = detail?.chapters
+            ?: mdLatestChapter
+            ?: tracking?.totalChapters ?: 0
+        log("CHAPTERS", "=== FALLBACK: synthetic chapter list (count=$fallbackTotal) ===")
+        if (mangaId != null) {
+            trackingManager.updateTotalChapters(mangaId, fallbackTotal)
+        }
+        return generateChapterList(mediaId, fallbackTotal)
+    }
+
+    /**
+     * Load chapters for the current manga into [_chapters].
+     *
+     * Delegates to [resolveChapterList] which prefers real MangaDex chapter UUIDs
+     * (loadable via the at-home server without an extension) and falls back to a
+     * synthetic list when MangaDex is unavailable.
+     */
     private suspend fun loadAniListChapters(mediaId: Int) {
         val mangaId = currentMangaId
-        val totalChapters = resolveChapterCount(mediaId)
-        val chapterList = generateChapterList(mediaId, totalChapters)
-
+        val chapterList = resolveChapterList(mediaId, mangaId)
         _chapters.value = chapterList
-        log("CHAPTERS", "Generated ${chapterList.size} chapters for media $mediaId")
-
-        mangaId?.let { trackingManager.updateTotalChapters(it, totalChapters) }
+        log("CHAPTERS", "Loaded ${chapterList.size} chapters for media $mediaId " +
+            "(mangadex=${chapterList.firstOrNull()?.url?.startsWith("mangadex:") == true})")
         refreshTrackingLists()
         _isLoading.value = false
     }
@@ -482,6 +742,10 @@ class MainViewModel(private val context: Context) : ViewModel() {
         currentMangaTitle = track.title
         currentMangaCoverUrl = track.coverUrl
         currentMangaUrl = track.mangaUrl
+        // Seed the MangaDex UUID cache from the persisted track so we skip the
+        // title-search lookup if we already resolved it on a previous open.
+        currentMangaDexId = track.mangaDexId
+        track.mangaDexVolumeCount?.let { _mangaDexVolumeCount.value = it }
         _selectedChapterIndex.value = -1
         _isLoading.value = true
         _chapterImages.value = UiState.Idle
@@ -502,7 +766,7 @@ class MainViewModel(private val context: Context) : ViewModel() {
             )
 
             val totalChapters = resolveChapterCount(mediaId)
-            val chapterList = generateChapterList(mediaId, totalChapters)
+            val chapterList = resolveChapterList(mediaId, track.mangaId)
             _chapters.value = chapterList
             trackingManager.updateTotalChapters(track.mangaId, totalChapters)
             refreshTrackingLists()
@@ -557,6 +821,10 @@ class MainViewModel(private val context: Context) : ViewModel() {
         currentMangaTitle = track.title
         currentMangaCoverUrl = track.coverUrl
         currentMangaUrl = track.mangaUrl
+        // Seed the MangaDex UUID cache from the persisted track so we skip the
+        // title-search lookup if we already resolved it on a previous open.
+        currentMangaDexId = track.mangaDexId
+        track.mangaDexVolumeCount?.let { _mangaDexVolumeCount.value = it }
         _selectedChapterIndex.value = -1
         _isLoading.value = true
         _chapterImages.value = UiState.Idle
@@ -575,7 +843,7 @@ class MainViewModel(private val context: Context) : ViewModel() {
             )
 
             val totalChapters = resolveChapterCount(mediaId)
-            val chapterList = generateChapterList(mediaId, totalChapters)
+            val chapterList = resolveChapterList(mediaId, track.mangaId)
             _chapters.value = chapterList
             trackingManager.updateTotalChapters(track.mangaId, totalChapters)
 
@@ -628,7 +896,7 @@ class MainViewModel(private val context: Context) : ViewModel() {
 
         viewModelScope.launch {
             val totalChapters = resolveChapterCount(mediaId)
-            val chapters = generateChapterList(mediaId, totalChapters)
+            val chapters = resolveChapterList(mediaId, mangaId)
             _chapters.value = chapters
 
             val safeChapterIndex = nextChapterIndex.coerceIn(0, chapters.lastIndex.coerceAtLeast(0))
@@ -678,14 +946,12 @@ class MainViewModel(private val context: Context) : ViewModel() {
             _chapterImages.value = UiState.Idle
 
             val mangaId = currentMangaId
-            val totalChapters = resolveChapterCount(mediaId)
-            val chapterList = generateChapterList(mediaId, totalChapters)
+            // resolveChapterList already calls updateTotalChapters + cacheMangaDexMetadata
+            // as side effects, so we don't need to duplicate that here.
+            val chapterList = resolveChapterList(mediaId, mangaId)
             _chapters.value = chapterList
 
-            mangaId?.let {
-                trackingManager.updateTotalChapters(it, totalChapters)
-                refreshTrackingLists()
-            }
+            mangaId?.let { refreshTrackingLists() }
 
             _isLoading.value = false
 
@@ -976,7 +1242,92 @@ class MainViewModel(private val context: Context) : ViewModel() {
         _chapterImages.value = UiState.Idle
     }
 
+    /**
+     * Reset all MangaDex-derived state for the current manga. Called when the user
+     * navigates away from the manga detail screen so the next manga starts fresh.
+     */
+    private fun clearMangaDexState() {
+        currentMangaDexId = null
+        _mangaDexChapterCount.value = null
+        _mangaDexVolumeCount.value = null
+    }
+
     // ======================== Image Loading (Extensions) ========================
+
+    /**
+     * Fetch the full chapter list from the user's selected extension.
+     *
+     * Calls the extension's `/chapters` ContentProvider path (added in
+     * atsumaru-extension v2). The extension searches atsu.moe for the manga,
+     * calls /api/manga/info, and returns the full chapters array with
+     * {number, title, id, index, pageCount} for each chapter.
+     *
+     * This REPLACES the MangaDex aggregate for chapter list building. MangaDex
+     * is no longer used at all — the extension (atsu.moe) is the sole source
+     * of truth for which chapters exist.
+     *
+     * Returns null if no extension is selected or the call fails.
+     */
+    private suspend fun fetchExtensionChapterList(mangaTitle: String): List<ExtensionChapter>? {
+        val authority = _selectedExtensionAuthority.value ?: return null
+        if (mangaTitle.isBlank()) return null
+        return withContext(Dispatchers.IO) {
+            try {
+                val uri = Uri.parse("content://$authority/chapters")
+                    .buildUpon()
+                    .appendQueryParameter("manga", mangaTitle)
+                    .appendQueryParameter("anime", mangaTitle)
+                    .build()
+                log("EXT", "=== FETCH CHAPTER LIST: mangaTitle='$mangaTitle' authority='$authority' ===")
+                val cursor = context.contentResolver.query(uri, null, null, null, null)
+                if (cursor == null) {
+                    log("EXT", "Extension returned null cursor")
+                    return@withContext null
+                }
+                cursor.use { c ->
+                    if (!c.moveToFirst()) {
+                        log("EXT", "Extension returned no data")
+                        return@withContext null
+                    }
+                    val col = c.getColumnIndex("data")
+                    if (col == -1) {
+                        log("EXT", "Missing 'data' column")
+                        return@withContext null
+                    }
+                    val jsonData = c.getString(col)
+                    log("EXT", "Extension raw response (first 500 chars): ${jsonData.take(500)}")
+                    val json = JSONObject(jsonData)
+                    if (json.has("error")) {
+                        log("EXT", "Extension error: ${json.getString("error")}")
+                        return@withContext null
+                    }
+                    val chaptersArr = json.optJSONArray("chapters") ?: return@withContext null
+                    val total = json.optInt("totalChapters", chaptersArr.length())
+                    val chapters = mutableListOf<ExtensionChapter>()
+                    for (i in 0 until chaptersArr.length()) {
+                        val ch = chaptersArr.optJSONObject(i) ?: continue
+                        val number = ch.optString("number", "")
+                        val title = ch.optString("title", "")
+                        val id = ch.optString("id", "")
+                        val index = ch.optInt("index", i)
+                        val pageCount = ch.optInt("pageCount", 0)
+                        chapters.add(ExtensionChapter(number, title, id, index, pageCount))
+                    }
+                    log("EXT", "=== EXTENSION CHAPTER LIST ===")
+                    log("EXT", "totalChapters: $total")
+                    log("EXT", "chapters returned: ${chapters.size}")
+                    if (chapters.isNotEmpty()) {
+                        log("EXT", "First 5: ${chapters.take(5).map { "${it.number} - ${it.title}" }}")
+                        log("EXT", "Last 5: ${chapters.takeLast(5).map { "${it.number} - ${it.title}" }}")
+                    }
+                    chapters
+                }
+            } catch (e: Exception) {
+                log("EXT", "fetchExtensionChapterList failed for '$mangaTitle': ${e.message}")
+                null
+            }
+        }
+    }
 
     private fun fetchImagesFromExtension(
         mangaTitle: String,
@@ -1026,20 +1377,39 @@ class MainViewModel(private val context: Context) : ViewModel() {
     private fun loadChapterImages(chapterUrl: String) {
         log("LOAD", "Attempting to load: $chapterUrl")
 
+        // Short-circuit: chapter that neither MangaDex nor the extension can
+        // provide (URL is `mangadex:unavailable:<n>`). These exist in the list
+        // so the user sees a complete 1..N chapter list, but they can't be read.
+        if (chapterUrl.startsWith("mangadex:unavailable:")) {
+            val chapterNum = chapterUrl.removePrefix("mangadex:unavailable:")
+            _chapterImages.value = UiState.Error(
+                "Chapter $chapterNum is not available. " +
+                "MangaDex doesn't have it (likely removed due to licensing) and " +
+                "no extension provides it. Select an extension in Settings that " +
+                "has this manga."
+            )
+            _isLoading.value = false
+            return
+        }
+
         viewModelScope.launch {
             _chapterImages.value = UiState.Loading
 
+            // All chapter images are loaded via the user's selected extension.
             val authority = _selectedExtensionAuthority.value
             if (authority != null) {
                 val chapter = _chapters.value.getOrNull(_selectedChapterIndex.value)
                 val title = chapter?.title ?: ""
-                val chapterParam = title.removePrefix("Chapter ").trim()
+                // Extract just the chapter number from the title.
+                // Title format: "Chapter 346" or "Chapter 346.2: Some Title"
+                // → chapterParam = "346" or "346.2"
+                val chapterParam = title.removePrefix("Chapter ").substringBefore(":").trim()
                 val mangaTitle = currentMangaTitle
                     ?: _mangaDetail.value?.titleEnglish
                     ?: _mangaDetail.value?.titleRomaji
                     ?: ""
                 if (mangaTitle.isNotBlank() && chapterParam.isNotBlank()) {
-                    log("LOAD", "Fetching: title='$title' -> chapterParam='$chapterParam' mangaTitle='$mangaTitle'")
+                    log("LOAD", "Fetching via extension: title='$title' -> chapterParam='$chapterParam' mangaTitle='$mangaTitle'")
                     val extResult = withContext(Dispatchers.IO) {
                         fetchImagesFromExtension(mangaTitle, chapterParam, authority)
                     }
@@ -1055,8 +1425,10 @@ class MainViewModel(private val context: Context) : ViewModel() {
             }
 
             _chapterImages.value = UiState.Error(
-                if (authority == null) "No extension selected. Install and select an extension in Settings."
-                else "Failed to load chapter images from extension"
+                if (authority == null)
+                    "No extension selected. Install and select an extension in Settings."
+                else
+                    "Failed to load chapter images"
             )
             _isLoading.value = false
         }
@@ -1129,6 +1501,60 @@ class MainViewModel(private val context: Context) : ViewModel() {
             _anilistUsername.value = anilistManager.getLoggedInUser()
             Log.d("ANILIST", "Synced ${matched.size} manga entries")
             _isAniListSyncing.value = false
+
+            // After the AniList sync has populated tracking entries, kick off a
+            // background MangaDex chapter-count refresh so the home screen cards
+            // show correct "Ch. X / Y" totals. This is fire-and-forget — each
+            // track is updated independently and the home screen re-collects on
+            // every refreshTrackingLists() call.
+            refreshMangaDexChapterCountsForAllTracks()
+        }
+    }
+
+    /**
+     * Background-refresh MangaDex chapter + volume counts for every tracking
+     * entry that is missing them (or that AniList reported as null/0).
+     *
+     * Runs on a coroutine so the caller doesn't have to be suspending. Iterates
+     * sequentially to avoid hammering the MangaDex API with N parallel requests
+     * (which would risk rate-limiting). Each successful lookup is cached on the
+     * [MangaTrack] so subsequent syncs skip the title search.
+     *
+     * Called automatically from [syncAnilistManga] and safe to call manually.
+     */
+    fun refreshMangaDexChapterCountsForAllTracks() {
+        viewModelScope.launch {
+            val tracks = trackingManager.getAllTracking()
+            Log.d("MANGADEX", "Refreshing chapter counts for ${tracks.size} tracked manga")
+            var refreshed = 0
+            for (track in tracks) {
+                // Skip tracks that already have a cached MangaDex ID AND a positive
+                // totalChapters value — no need to re-query MangaDex for those.
+                if (track.mangaDexId != null && track.totalChapters > 0) continue
+
+                val mediaId = track.anilistMediaId ?: extractAnilistMediaId(track.mangaId)
+                val aggregate = if (mediaId != null) {
+                    mangaDexManager.fetchAggregateForAniList(track.title, mediaId)
+                } else {
+                    mangaDexManager.fetchAggregateForTitle(track.title)
+                }
+
+                if (aggregate != null && aggregate.totalChapters > 0) {
+                    val updated = track.copy(
+                        totalChapters = aggregate.totalChapters,
+                        mangaDexId = aggregate.mangaId,
+                        mangaDexVolumeCount = aggregate.totalVolumes
+                    )
+                    trackingManager.updateTracking(updated)
+                    refreshed++
+                    Log.d("MANGADEX", "Refreshed '${track.title}': " +
+                        "${aggregate.totalChapters} chapters, ${aggregate.totalVolumes} volumes")
+                    // Update the home screen as each track comes in, rather than
+                    // waiting for the entire batch to finish.
+                    refreshTrackingLists()
+                }
+            }
+            Log.d("MANGADEX", "Chapter-count refresh complete: $refreshed/${tracks.size} updated")
         }
     }
 
@@ -1261,6 +1687,7 @@ class MainViewModel(private val context: Context) : ViewModel() {
 
     fun clearMangaDetail() {
         _mangaDetail.value = null
+        clearMangaDexState()
     }
 
     fun updateAnilistSyncThreshold(percent: Int) {

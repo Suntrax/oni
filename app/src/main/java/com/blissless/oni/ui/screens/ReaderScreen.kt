@@ -422,8 +422,14 @@ fun ChapterListWithGroups(
 
         val listState = rememberLazyListState()
         val chapterToExpand = if (selectedIndex >= 0) selectedIndex else nextChapterToRead
+        // Only count integer chapters (not sub-chapters like 346.1, 346.2) toward
+        // the total so the progress bar and "X / Y" label are accurate.
+        val integerChapterCount = chapters.count { ch ->
+            val num = ch.title?.removePrefix("Chapter ")?.trim()?.toFloatOrNull()
+            num != null && num == num.toInt().toFloat()
+        }
         val readCount = readChapterIndices.size
-        val totalCount = chapters.size
+        val totalCount = integerChapterCount.coerceAtLeast(chapters.size)
         val progress = if (totalCount > 0) readCount.toFloat() / totalCount else 0f
 
         LaunchedEffect(chapters, chapterToExpand) {
@@ -880,7 +886,11 @@ fun ChapterRow(
     onClick: () -> Unit
 ) {
     val showAsNext = isNextToRead && !isRead
+    // Chapters that neither MangaDex nor the extension can provide are rendered
+    // greyed out. Clicking still shows the error so the user knows why.
+    val isUnavailable = chapter.url.startsWith("mangadex:unavailable:")
     val accentColor = when {
+        isUnavailable -> Color(0xFF3A3A3A)
         isSelected && !showAsNext -> BlueAccent
         showAsNext -> BlueLight
         isRead -> ReadGreen
@@ -920,6 +930,7 @@ fun ChapterRow(
                 text = "Ch. $chNum",
                 style = MaterialTheme.typography.bodyMedium,
                 color = when {
+                    isUnavailable -> SilverDark.copy(alpha = 0.4f)
                     showAsNext -> BlueLight
                     isSelected -> BlueAccent
                     isRead -> ReadGreen.copy(alpha = 0.8f)
@@ -935,6 +946,7 @@ fun ChapterRow(
                 text = chapter.title ?: "",
                 style = MaterialTheme.typography.bodyMedium,
                 color = when {
+                    isUnavailable -> SilverDark.copy(alpha = 0.5f)
                     showAsNext -> Color.White
                     isSelected -> Color.White
                     isNextToRead -> Color.White

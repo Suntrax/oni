@@ -137,6 +137,9 @@ fun MangaDetailScreen(
     val isLoading by viewModel.isLoading.collectAsState()
     val chapters by viewModel.chapters.collectAsState()
     val readChapterIndices by viewModel.readChapterIndices.collectAsState()
+    // MangaDex-derived counts - used as fallbacks when AniList doesn't have them.
+    val mangaDexChapterCount by viewModel.mangaDexChapterCount.collectAsState()
+    val mangaDexVolumeCount by viewModel.mangaDexVolumeCount.collectAsState()
     val detail = mangaDetail
 
     var currentStatus by remember(detail?.id) { mutableStateOf<ReadingStatus?>(null) }
@@ -197,7 +200,12 @@ fun MangaDetailScreen(
                 ) {
                     HeaderSection(detail, fallbackCoverUrl)
                     Spacer(modifier = Modifier.height(20.dp))
-                    StatsCard(detail, chapters.size)
+                    StatsCard(
+                        detail = detail,
+                        actualChapters = chapters.size,
+                        mangaDexChapterCount = mangaDexChapterCount,
+                        mangaDexVolumeCount = mangaDexVolumeCount
+                    )
                     Spacer(modifier = Modifier.height(20.dp))
                     ActionButtonsCard(
                         detail = detail,
@@ -325,7 +333,9 @@ fun MangaDetailScreen(
         if (showChapterDialog) {
             ChapterProgressDialog(
                 currentChapter = currentChapter,
-                totalChapters = chapters.size.coerceAtLeast(detail?.chapters ?: 0),
+                totalChapters = chapters.size
+                    .coerceAtLeast(detail?.chapters ?: 0)
+                    .coerceAtLeast(mangaDexChapterCount ?: 0),
                 onSet = { chapter ->
                     viewModel.setManualChapterProgress(chapter)
                     currentChapter = chapter
@@ -511,7 +521,12 @@ private fun HeaderSection(detail: AniListMangaDetail, fallbackCoverUrl: String?)
 }
 
 @Composable
-private fun StatsCard(detail: AniListMangaDetail, actualChapters: Int = 0) {
+private fun StatsCard(
+    detail: AniListMangaDetail,
+    actualChapters: Int = 0,
+    mangaDexChapterCount: Int? = null,
+    mangaDexVolumeCount: Int? = null
+) {
     Card(
         modifier = Modifier
             .fillMaxWidth()
@@ -534,7 +549,14 @@ private fun StatsCard(detail: AniListMangaDetail, actualChapters: Int = 0) {
                 label = "Score",
                 color = Color(0xFFfbbf24)
             )
-            val displayChapters = detail.chapters ?: actualChapters
+            // Chapters: prefer AniList, fall back to MangaDex aggregate, then to
+            // the loaded chapter list size. We display whenever ANY source has a
+            // positive value, so the user always sees a chapter count.
+            val displayChapters = detail.chapters
+                ?.takeIf { it > 0 }
+                ?: mangaDexChapterCount?.takeIf { it > 0 }
+                ?: actualChapters.takeIf { it > 0 }
+                ?: 0
             if (displayChapters > 0) {
                 DividerDot()
                 StatItem(
@@ -544,11 +566,15 @@ private fun StatsCard(detail: AniListMangaDetail, actualChapters: Int = 0) {
                     color = SilverLight
                 )
             }
-            if (detail.volumes != null) {
+            // Volumes: prefer AniList, fall back to MangaDex aggregate volume count.
+            val displayVolumes = detail.volumes
+                ?.takeIf { it > 0 }
+                ?: mangaDexVolumeCount?.takeIf { it > 0 }
+            if (displayVolumes != null) {
                 DividerDot()
                 StatItem(
                     icon = null,
-                    value = "${detail.volumes}",
+                    value = "$displayVolumes",
                     label = "Volumes",
                     color = SilverLight
                 )
