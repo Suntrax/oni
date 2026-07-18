@@ -64,6 +64,7 @@ import androidx.compose.ui.unit.sp
 import androidx.lifecycle.viewmodel.compose.viewModel
 import com.blissless.oni.BuildConfig
 import com.blissless.oni.MainActivity
+import com.blissless.oni.data.ReaderMode
 import com.blissless.oni.ui.theme.BlueAccent
 import com.blissless.oni.ui.theme.BlueDark
 import com.blissless.oni.ui.theme.BlueLight
@@ -91,6 +92,7 @@ fun SettingsScreen(viewModel: MainViewModel) {
     val checkUpdatesOnStart by viewModel.checkUpdatesOnStart.collectAsState()
     val extensions by viewModel.installedExtensions.collectAsState()
     val selectedExtensionAuthority by viewModel.selectedExtensionAuthority.collectAsState()
+    val readerMode by viewModel.readerMode.collectAsState()
     val context = LocalContext.current
 
     val updateViewModel: UpdateViewModel = viewModel()
@@ -257,6 +259,74 @@ fun SettingsScreen(viewModel: MainViewModel) {
                     ),
                     steps = 24
                 )
+            }
+        }
+
+        Spacer(Modifier.height(20.dp))
+
+        // Reader Section
+        SettingsSectionHeader("Reader")
+        SettingsCard {
+            Column(
+                modifier = Modifier
+                    .fillMaxWidth()
+                    .padding(horizontal = 16.dp, vertical = 12.dp)
+            ) {
+                Text("Reading Mode", color = SilverLight, style = MaterialTheme.typography.bodyLarge)
+                Text(
+                    "Choose how pages are laid out. Paged modes show one page per screen; vertical scrolls continuously.",
+                    color = SilverDark,
+                    style = MaterialTheme.typography.bodySmall
+                )
+                Spacer(Modifier.height(12.dp))
+
+                ReaderMode.entries.forEach { mode ->
+                    Row(
+                        modifier = Modifier
+                            .fillMaxWidth()
+                            .clickable { viewModel.setReaderMode(mode) }
+                            .padding(vertical = 10.dp),
+                        verticalAlignment = Alignment.CenterVertically
+                    ) {
+                        Box(
+                            modifier = Modifier
+                                .size(20.dp)
+                                .clip(RoundedCornerShape(10.dp))
+                                .background(
+                                    if (readerMode == mode) BlueAccent
+                                    else Color.Transparent
+                                )
+                                .border(
+                                    width = if (readerMode == mode) 0.dp else 1.dp,
+                                    color = if (readerMode == mode) BlueAccent else SilverDark,
+                                    shape = RoundedCornerShape(10.dp)
+                                ),
+                            contentAlignment = Alignment.Center
+                        ) {
+                            if (readerMode == mode) {
+                                Icon(
+                                    Icons.Default.CheckCircle,
+                                    contentDescription = null,
+                                    tint = Color.White,
+                                    modifier = Modifier.size(12.dp)
+                                )
+                            }
+                        }
+                        Spacer(Modifier.width(12.dp))
+                        Column(modifier = Modifier.weight(1f)) {
+                            Text(mode.displayLabel, color = SilverLight, style = MaterialTheme.typography.bodyMedium, fontWeight = FontWeight.Medium)
+                            Text(
+                                text = when (mode) {
+                                    ReaderMode.VERTICAL_SCROLL -> "Webtoon-style continuous scroll"
+                                    ReaderMode.LEFT_TO_RIGHT -> "One page per screen, swipe left for next"
+                                    ReaderMode.RIGHT_TO_LEFT -> "One page per screen, swipe right for next (manga style)"
+                                },
+                                color = SilverDark,
+                                style = MaterialTheme.typography.bodySmall
+                            )
+                        }
+                    }
+                }
             }
         }
 

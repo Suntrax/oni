@@ -35,12 +35,14 @@ import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.foundation.text.BasicTextField
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.automirrored.filled.ArrowBack
+import androidx.compose.material.icons.automirrored.filled.ArrowForward
 import androidx.compose.material.icons.filled.Close
 import androidx.compose.material.icons.filled.KeyboardArrowDown
 import androidx.compose.material.icons.filled.PlayArrow
 import androidx.compose.material.icons.filled.Search
 import androidx.compose.material.icons.filled.SkipNext
 import androidx.compose.material.icons.filled.SkipPrevious
+import androidx.compose.material.icons.filled.ViewAgenda
 import androidx.compose.material3.Button
 import androidx.compose.material3.ButtonDefaults
 import androidx.compose.material3.Card
@@ -69,14 +71,13 @@ import androidx.compose.ui.draw.clip
 import androidx.compose.ui.graphics.Brush
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.graphicsLayer
-import androidx.compose.ui.layout.ContentScale
 import androidx.compose.ui.text.TextStyle
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
-import coil.compose.AsyncImage
 import com.blissless.oni.data.ChapterInfo
+import com.blissless.oni.data.ReaderMode
 import com.blissless.oni.viewmodel.MainViewModel
 import com.blissless.oni.viewmodel.UiState
 import com.blissless.oni.ui.theme.BlueAccent
@@ -96,6 +97,7 @@ import com.blissless.oni.ui.theme.SearchBarBg
 import com.blissless.oni.ui.theme.SilverDark
 import com.blissless.oni.ui.theme.SilverLight
 import kotlinx.coroutines.delay
+import kotlinx.coroutines.flow.distinctUntilChanged
 
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
@@ -112,11 +114,24 @@ fun ReaderScreen(
     val nextChapterToRead by viewModel.nextChapterToRead.collectAsState()
     val syncThreshold by viewModel.anilistSyncThreshold.collectAsState()
     val resumeScrollProgress by viewModel.resumeScrollProgress.collectAsState()
+    val readerMode by viewModel.readerMode.collectAsState()
+
+    // Tracks the page index the user is currently on while in a paged reader
+    // mode. Updated by the PagedMangaReader's onPageChanged callback. Used to
+    // render the "Page X / Y" indicator in the header and to feed scroll
+    // progress back to the ViewModel for AniList sync.
+    var currentPageIndex by remember { mutableStateOf(0) }
 
     val listState = rememberLazyListState()
     var isShowingChapterList by remember { mutableStateOf(selectedIndex < 0) }
     var scrollProgress by remember { mutableStateOf(0f) }
-    
+
+    // Unified reading progress (0..1), preserved across mode switches so the
+    // user doesn't lose their place when they switch between vertical scroll
+    // and paged modes. Both modes write to this; the mode being switched INTO
+    // reads from it to compute its initial position.
+    var unifiedProgress by remember { mutableStateOf(0f) }
+
     LaunchedEffect(selectedIndex) {
         isShowingChapterList = selectedIndex < 0
         if (selectedIndex < 0) {
@@ -125,6 +140,10 @@ fun ReaderScreen(
         if (selectedIndex >= 0 && resumeScrollProgress < 0f) {
             listState.scrollToItem(0)
         }
+        // Reset the paged-mode page index whenever the chapter changes, so
+        // the new chapter starts at page 1 and the header indicator is correct.
+        currentPageIndex = 0
+        unifiedProgress = 0f
     }
     
     LaunchedEffect(listState) {
@@ -143,8 +162,20 @@ fun ReaderScreen(
             if (maxScroll <= 0f) 0f else (currentScroll / maxScroll).coerceIn(0f, 1f)
         }.collect { progress: Float ->
             scrollProgress = progress
+            unifiedProgress = progress
             viewModel.onChapterScrollProgress(progress)
         }
+    }
+
+    // Track the current page index in vertical mode by watching the
+    // LazyColumn's firstVisibleItemIndex. This is the PAGE the user is
+    // currently looking at (not a pixel-based progress), which is what we
+    // need when switching to paged mode — pixel-based progress doesn't map
+    // cleanly to page indices when pages have unequal heights.
+    LaunchedEffect(listState) {
+        snapshotFlow { listState.firstVisibleItemIndex }
+            .distinctUntilChanged()
+            .collect { index -> currentPageIndex = index }
     }
 
     // Scroll to saved resume position after images load
@@ -157,6 +188,40 @@ fun ReaderScreen(
                 delay(200)
                 listState.scrollToItem(targetIndex)
                 viewModel.clearResumeScrollProgress()
+            }
+        }
+    }
+
+    // When the reader mode changes mid-chapter, restore the user's reading
+    // position using `currentPageIndex` — the actual page the user was
+    // looking at, tracked by both modes (vertical via firstVisibleItemIndex,
+    // paged via onPageChanged).
+    //
+    // We deliberately do NOT use `unifiedProgress` (pixel-based) here because
+    // it doesn't map cleanly to page indices when manga pages have unequal
+    // heights — e.g. being 50% scrolled through a chapter with 10 pages of
+    // varying heights doesn't mean you're on page 5.
+    LaunchedEffect(readerMode) {
+        if (selectedIndex < 0) return@LaunchedEffect
+        val images = (chapterImages as? UiState.Success)?.data?.images ?: return@LaunchedEffect
+        if (images.isEmpty()) return@LaunchedEffect
+
+        // Clamp to valid range for the new mode's content.
+        val targetIndex = currentPageIndex.coerceIn(0, images.lastIndex)
+        when (readerMode) {
+            ReaderMode.VERTICAL_SCROLL -> {
+                // Give the LazyColumn a frame to recompose with the new
+                // content before we attempt to scroll.
+                delay(50)
+                if (targetIndex < listState.layoutInfo.totalItemsCount) {
+                    listState.scrollToItem(targetIndex)
+                }
+            }
+            ReaderMode.LEFT_TO_RIGHT, ReaderMode.RIGHT_TO_LEFT -> {
+                // PagedMangaReader reads `initialPage` on first composition,
+                // so updating currentPageIndex here makes the pager start at
+                // the right page when it appears.
+                currentPageIndex = targetIndex
             }
         }
     }
@@ -178,10 +243,23 @@ fun ReaderScreen(
                                 overflow = TextOverflow.Ellipsis
                             )
                             if (selectedIndex >= 0 && selectedIndex < chapters.size) {
+                                // Subtitle: chapter title + page indicator (paged
+                                // modes only). In vertical scroll mode the page
+                                // count is less meaningful so we hide it.
+                                val pagePart = when {
+                                    readerMode != ReaderMode.VERTICAL_SCROLL &&
+                                        chapterImages is UiState.Success -> {
+                                        val total = (chapterImages as UiState.Success).data.images.size
+                                        if (total > 0) "  ·  Page ${currentPageIndex + 1}/$total" else ""
+                                    }
+                                    else -> ""
+                                }
                                 Text(
-                                    text = chapters[selectedIndex].title ?: "Chapter ${selectedIndex + 1}",
+                                    text = (chapters[selectedIndex].title ?: "Chapter ${selectedIndex + 1}") + pagePart,
                                     style = MaterialTheme.typography.bodySmall,
-                                    color = SilverDark
+                                    color = SilverDark,
+                                    maxLines = 1,
+                                    overflow = TextOverflow.Ellipsis
                                 )
                             }
                         }
@@ -193,8 +271,22 @@ fun ReaderScreen(
                     },
                     actions = {
                         if (!isShowingChapterList && selectedIndex >= 0) {
+                            // Segmented reader-mode indicator. Three mini icons
+                            // in a row; the active mode is highlighted with the
+                            // app accent color, the others are dimmed. Tapping
+                            // any of the three directly selects that mode — no
+                            // more cycling through one button at a time.
+                            //
+                            // Icons chosen to match each mode's mental model:
+                            //  - ViewAgenda      : stacked horizontal bars = vertical scroll
+                            //  - ArrowForward    : rightward arrow = LTR (swipe left for next)
+                            //  - ArrowBack       : leftward arrow = RTL (swipe right for next)
+                            ReaderModeSegmentedToggle(
+                                currentMode = readerMode,
+                                onSelect = { viewModel.setReaderMode(it) }
+                            )
                             IconButton(
-                                onClick = { 
+                                onClick = {
                                     if (selectedIndex > 0) {
                                         viewModel.selectChapter(selectedIndex - 1)
                                     }
@@ -314,29 +406,71 @@ fun ReaderScreen(
                             }
                         }
                     }
-                } else {
-                    LazyColumn(
-                        state = listState,
-                        modifier = Modifier
-                            .fillMaxSize()
-                            .padding(paddingValues),
-                        contentPadding = PaddingValues(8.dp),
-                        verticalArrangement = Arrangement.spacedBy(8.dp)
-                    ) {
-                        itemsIndexed(images, key = { index, _ -> "page_$index" }) { index, imageUrl ->
-                            Box(
-                                modifier = Modifier
-                                    .fillMaxWidth()
-                                    .heightIn(min = 50.dp)
-                            ) {
-                                AsyncImage(
-                                    model = imageUrl,
+                } else when (readerMode) {
+                    // ---------------- Vertical scroll (webtoon) ----------------
+                    // Original behaviour: continuous LazyColumn, one page per row.
+                    // Pages use MihonZoomableImage so the user can pinch-zoom a
+                    // specific page even in vertical mode, while one-finger drag
+                    // at 1× still scrolls the list.
+                    ReaderMode.VERTICAL_SCROLL -> {
+                        LazyColumn(
+                            state = listState,
+                            modifier = Modifier
+                                .fillMaxSize()
+                                .padding(paddingValues),
+                            contentPadding = PaddingValues(8.dp),
+                            verticalArrangement = Arrangement.spacedBy(8.dp)
+                        ) {
+                            itemsIndexed(images, key = { index, _ -> "page_$index" }) { index, imageUrl ->
+                                MihonZoomableImage(
+                                    imageUrl = imageUrl,
                                     contentDescription = "Page ${index + 1}",
-                                    modifier = Modifier.fillMaxWidth(),
-                                    contentScale = ContentScale.FillWidth
+                                    modifier = Modifier
+                                        .fillMaxWidth()
+                                        .heightIn(min = 50.dp),
+                                    fillWidth = true
+                                    // No onSingleTap in vertical mode — single tap
+                                    // does nothing, matching the original reader.
                                 )
                             }
                         }
+                    }
+
+                    // ---------------- Paged (LTR / RTL) ----------------
+                    // One page per screen, swipe horizontally to navigate.
+                    // Single tap = next page (with a small back-edge zone),
+                    // double tap = zoom in/out at the tap point.
+                    ReaderMode.LEFT_TO_RIGHT, ReaderMode.RIGHT_TO_LEFT -> {
+                        PagedMangaReader(
+                            images = images,
+                            initialPage = currentPageIndex.coerceIn(0, images.lastIndex),
+                            mode = readerMode,
+                            chapterTitle = if (selectedIndex in chapters.indices)
+                                chapters[selectedIndex].title else null,
+                            onPageChanged = { page ->
+                                currentPageIndex = page
+                                // Feed the pager's position into the same
+                                // scroll-progress machinery the vertical list
+                                // uses, so AniList "read" sync still fires at
+                                // the configured threshold.
+                                val progress = if (images.size > 1) {
+                                    page.toFloat() / (images.size - 1).toFloat()
+                                } else 1f
+                                scrollProgress = progress
+                                unifiedProgress = progress
+                                viewModel.onChapterScrollProgress(progress)
+                            },
+                            onChapterBoundary = { direction ->
+                                val target = selectedIndex + direction
+                                if (target in chapters.indices) {
+                                    viewModel.selectChapter(target)
+                                    // Reset page index for the new chapter so
+                                    // the header indicator starts at 1/total.
+                                    currentPageIndex = if (direction > 0) 0 else 0
+                                }
+                            },
+                            modifier = Modifier.padding(paddingValues)
+                        )
                     }
                 }
             }
@@ -1001,5 +1135,78 @@ fun ChapterRow(
                     .align(Alignment.BottomCenter)
             )
         }
+    }
+}
+
+/**
+ * Segmented 3-mode toggle for the reader layout. Shows all three options
+ * simultaneously so the user can see the current mode at a glance (instead
+ * of having to tap a single button to cycle through).
+ *
+ * Layout: a pill-shaped Row with three equal-width segments. The active
+ * segment gets the accent color background; inactive segments are dimmed.
+ *
+ * Icons:
+ *  - VERTICAL_SCROLL → ViewAgenda (stacked horizontal bars, like webtoon panels)
+ *  - LEFT_TO_RIGHT   → ArrowForward (rightward arrow, "next is to the right")
+ *  - RIGHT_TO_LEFT   → ArrowBack (leftward arrow, "next is to the left")
+ *
+ * The whole control is intentionally compact (~110dp wide) so it fits in the
+ * TopAppBar actions without pushing the prev/next chapter buttons off-screen.
+ */
+@Composable
+private fun ReaderModeSegmentedToggle(
+    currentMode: ReaderMode,
+    onSelect: (ReaderMode) -> Unit,
+    modifier: Modifier = Modifier
+) {
+    Row(
+        modifier = modifier
+            .clip(RoundedCornerShape(10.dp))
+            .background(Color.White.copy(alpha = 0.08f))
+            .padding(2.dp)
+    ) {
+        SegmentedToggleItem(
+            icon = Icons.Default.ViewAgenda,
+            contentDescription = "Vertical scroll mode",
+            selected = currentMode == ReaderMode.VERTICAL_SCROLL,
+            onClick = { onSelect(ReaderMode.VERTICAL_SCROLL) }
+        )
+        SegmentedToggleItem(
+            icon = Icons.AutoMirrored.Filled.ArrowForward,
+            contentDescription = "Left to right paged mode",
+            selected = currentMode == ReaderMode.LEFT_TO_RIGHT,
+            onClick = { onSelect(ReaderMode.LEFT_TO_RIGHT) }
+        )
+        SegmentedToggleItem(
+            icon = Icons.AutoMirrored.Filled.ArrowBack,
+            contentDescription = "Right to left paged mode",
+            selected = currentMode == ReaderMode.RIGHT_TO_LEFT,
+            onClick = { onSelect(ReaderMode.RIGHT_TO_LEFT) }
+        )
+    }
+}
+
+@Composable
+private fun SegmentedToggleItem(
+    icon: androidx.compose.ui.graphics.vector.ImageVector,
+    contentDescription: String,
+    selected: Boolean,
+    onClick: () -> Unit
+) {
+    Box(
+        modifier = Modifier
+            .size(32.dp)
+            .clip(RoundedCornerShape(8.dp))
+            .background(if (selected) BlueAccent else Color.Transparent)
+            .clickable(onClick = onClick),
+        contentAlignment = Alignment.Center
+    ) {
+        Icon(
+            icon,
+            contentDescription = contentDescription,
+            tint = if (selected) Color.White else Color.White.copy(alpha = 0.5f),
+            modifier = Modifier.size(18.dp)
+        )
     }
 }

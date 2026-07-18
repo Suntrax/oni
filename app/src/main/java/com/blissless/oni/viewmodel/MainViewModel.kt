@@ -19,6 +19,7 @@ import com.blissless.oni.data.MangaDexAggregate
 import com.blissless.oni.data.MangaDexManager
 import com.blissless.oni.data.MangaSearchResult
 import com.blissless.oni.data.MangaTrack
+import com.blissless.oni.data.ReaderMode
 import com.blissless.oni.data.ReadingStatus
 import com.blissless.oni.data.SettingsManager
 import com.blissless.oni.data.TrackingManager
@@ -196,6 +197,27 @@ class MainViewModel(private val context: Context) : ViewModel() {
 
     private val _selectedExtensionAuthority = MutableStateFlow(settingsManager.getSelectedExtensionAuthority())
     val selectedExtensionAuthority: StateFlow<String?> = _selectedExtensionAuthority.asStateFlow()
+
+    // Reader layout: vertical scroll (webtoon) vs paged (LTR/RTL).
+    // Exposed as a StateFlow so ReaderScreen recomposes instantly when the user
+    // changes the mode either from Settings or from the reader header button.
+    private val _readerMode = MutableStateFlow(settingsManager.getReaderMode())
+    val readerMode: StateFlow<ReaderMode> = _readerMode.asStateFlow()
+
+    fun setReaderMode(mode: ReaderMode) {
+        settingsManager.setReaderMode(mode)
+        _readerMode.value = mode
+    }
+
+    /** Cycle to the next reader mode — used by the quick-toggle button in the reader header. */
+    fun cycleReaderMode() {
+        val next = when (_readerMode.value) {
+            ReaderMode.VERTICAL_SCROLL -> ReaderMode.LEFT_TO_RIGHT
+            ReaderMode.LEFT_TO_RIGHT -> ReaderMode.RIGHT_TO_LEFT
+            ReaderMode.RIGHT_TO_LEFT -> ReaderMode.VERTICAL_SCROLL
+        }
+        setReaderMode(next)
+    }
 
     fun selectExtension(authority: String?) {
         settingsManager.setSelectedExtensionAuthority(authority)
