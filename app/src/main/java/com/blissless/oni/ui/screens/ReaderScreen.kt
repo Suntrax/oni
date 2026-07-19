@@ -425,7 +425,7 @@ fun ReaderScreen(
                                         .fillMaxWidth()
                                         .heightIn(min = 50.dp),
                                     fillWidth = true
-                                    // No onSingleTap in vertical mode — single tap
+                                    // No onSingleTap in vertical mode -- single tap
                                     // does nothing, matching the original reader.
                                 )
                             }

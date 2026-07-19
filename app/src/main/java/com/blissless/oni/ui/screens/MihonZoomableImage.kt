@@ -81,7 +81,7 @@ fun MihonZoomableImage(
      * If true, the image is scaled to fill the available width (used by the
      * vertical scroll reader so pages span edge-to-edge). If false, the image
      * is fit inside the available bounds preserving aspect ratio (used by the
-     * paged reader so a full page is always visible at 1×).
+     * paged reader so a full page is always visible at 1x).
      */
     fillWidth: Boolean = false,
     /**
@@ -91,7 +91,7 @@ fun MihonZoomableImage(
     onSingleTap: ((Offset) -> Unit)? = null,
     /**
      * Notifies the caller whenever the image's zoom state changes. `true` means
-     * the user has zoomed in (scale > 1); `false` means back to 1×. The paged
+     * the user has zoomed in (scale > 1); `false` means back to 1x. The paged
      * reader uses this to disable HorizontalPager swipe while zoomed, so the
      * user can pan without flipping pages.
      */

@@ -1062,7 +1062,13 @@ class MainViewModel(private val context: Context) : ViewModel() {
                     trackingManager.updateTracking(track)
                     log("TRACK", "Created tracking for chapter ${_selectedChapterIndex.value} at $scrollPercent")
                 } else {
-                    trackingManager.updateScrollProgress(mangaId, scrollPercent)
+                    // If this chapter was already marked as read (threshold was
+                    // previously crossed), do NOT overwrite the persisted state.
+                    // Scrolling back after finishing a chapter should not corrupt
+                    // the tracking entry or create a "resume reading" entry.
+                    if (_selectedChapterIndex.value !in _readChapterIndices.value) {
+                        trackingManager.updateScrollProgress(mangaId, scrollPercent)
+                    }
                 }
 
                 if (scrollPercent >= threshold) {
