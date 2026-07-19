@@ -18,9 +18,12 @@ import androidx.compose.ui.draw.clipToBounds
 import androidx.compose.ui.graphics.graphicsLayer
 import androidx.compose.ui.input.pointer.pointerInput
 import androidx.compose.ui.layout.ContentScale
+import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.platform.LocalDensity
 import androidx.compose.ui.unit.dp
 import coil.compose.AsyncImage
+import coil.request.CachePolicy
+import coil.request.ImageRequest
 import kotlinx.coroutines.launch
 
 /**
@@ -62,13 +65,25 @@ import kotlinx.coroutines.launch
 fun InlineZoomableImage(
     imageUrl: String,
     contentDescription: String?,
-    modifier: Modifier = Modifier
+    modifier: Modifier = Modifier,
 ) {
     val scope = rememberCoroutineScope()
+    val context = LocalContext.current
     val scale = remember { Animatable(1f) }
     val offsetX = remember { Animatable(0f) }
     val offsetY = remember { Animatable(0f) }
     val density = LocalDensity.current
+
+    // Build the ImageRequest with both memory and disk caching disabled —
+    // same as [MihonZoomableImage]. See that composable's KDoc for the
+    // rationale: chapter pages are never stored on-device.
+    val imageRequest = remember(imageUrl) {
+        ImageRequest.Builder(context)
+            .data(imageUrl)
+            .memoryCachePolicy(CachePolicy.DISABLED)
+            .diskCachePolicy(CachePolicy.DISABLED)
+            .build()
+    }
 
     // Pan limits. The exact bound depends on the rendered image's pixel size,
     // which we don't know until the AsyncImage has loaded. These values are
@@ -161,7 +176,7 @@ fun InlineZoomableImage(
             }
     ) {
         AsyncImage(
-            model = imageUrl,
+            model = imageRequest,
             contentDescription = contentDescription,
             modifier = Modifier
                 .fillMaxWidth()

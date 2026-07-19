@@ -57,7 +57,7 @@ fun PagedMangaReader(
     chapterTitle: String?,
     onPageChanged: (pageIndex: Int) -> Unit,
     onChapterBoundary: (direction: Int) -> Unit,
-    modifier: Modifier = Modifier
+    modifier: Modifier = Modifier,
 ) {
     if (images.isEmpty()) {
         Box(

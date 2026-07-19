@@ -28,8 +28,11 @@ import androidx.compose.ui.graphics.graphicsLayer
 import androidx.compose.ui.input.pointer.pointerInput
 import androidx.compose.ui.layout.ContentScale
 import androidx.compose.ui.layout.onSizeChanged
+import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.unit.toSize
 import coil.compose.AsyncImage
+import coil.request.CachePolicy
+import coil.request.ImageRequest
 import kotlinx.coroutines.flow.distinctUntilChanged
 import kotlinx.coroutines.launch
 
@@ -98,6 +101,30 @@ fun MihonZoomableImage(
     onZoomChanged: ((zoomed: Boolean) -> Unit)? = null
 ) {
     val scope = rememberCoroutineScope()
+    val context = LocalContext.current
+
+    // Build the ImageRequest with both memory and disk caching disabled.
+    //
+    // Chapter pages are fetched fresh from the network every time they're
+    // scrolled into view — no bitmap memory cache, no on-disk cache. This is
+    // a deliberate choice: the user explicitly wants zero on-device storage
+    // of chapter content.
+    //
+    // Trade-off: scrolling back through already-seen pages re-downloads them.
+    // On a fast connection this is usually imperceptible; on a slow connection
+    // there may be a brief placeholder flicker. Preloading of adjacent pages
+    // still works (Coil's prefetcher just bypasses the caches too).
+    //
+    // We deliberately DON'T crossfade here: the existing reader UX expects
+    // pages to appear instantly when scrolled into view, and a crossfade on
+    // every load would make scrolling feel laggy.
+    val imageRequest = remember(imageUrl) {
+        ImageRequest.Builder(context)
+            .data(imageUrl)
+            .memoryCachePolicy(CachePolicy.DISABLED)
+            .diskCachePolicy(CachePolicy.DISABLED)
+            .build()
+    }
 
     // Scale and offset are stored as plain mutableStateOf rather than Animatable.
     // Rationale: we drive programmatic animations (double-tap, snap-back) via
@@ -416,7 +443,7 @@ fun MihonZoomableImage(
             }
     ) {
         AsyncImage(
-            model = imageUrl,
+            model = imageRequest,
             contentDescription = contentDescription,
             modifier = Modifier
                 .then(if (fillWidth) Modifier.fillMaxWidth() else Modifier.fillMaxSize())
