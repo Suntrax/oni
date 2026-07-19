@@ -243,12 +243,8 @@ fun ReaderScreen(
                                 overflow = TextOverflow.Ellipsis
                             )
                             if (selectedIndex >= 0 && selectedIndex < chapters.size) {
-                                // Subtitle: chapter title + page indicator (paged
-                                // modes only). In vertical scroll mode the page
-                                // count is less meaningful so we hide it.
                                 val pagePart = when {
-                                    readerMode != ReaderMode.VERTICAL_SCROLL &&
-                                        chapterImages is UiState.Success -> {
+                                    chapterImages is UiState.Success -> {
                                         val total = (chapterImages as UiState.Success).data.images.size
                                         if (total > 0) "  ·  Page ${currentPageIndex + 1}/$total" else ""
                                     }

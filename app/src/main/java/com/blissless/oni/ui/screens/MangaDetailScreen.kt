@@ -85,6 +85,8 @@ import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
+import androidx.compose.ui.draw.clipToBounds
+import androidx.compose.foundation.layout.offset
 import androidx.compose.ui.graphics.Brush
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.vector.ImageVector
@@ -122,13 +124,13 @@ import com.blissless.oni.ui.theme.StatusDropped
 import com.blissless.oni.ui.theme.StatusPaused
 import com.blissless.oni.ui.theme.StatusPlanning
 import com.blissless.oni.viewmodel.MainViewModel
+import com.blissless.oni.viewmodel.UiState
 
 @OptIn(ExperimentalMaterial3Api::class, ExperimentalLayoutApi::class)
 @Composable
 fun MangaDetailScreen(
     viewModel: MainViewModel,
     onBack: () -> Unit,
-    onStartReading: () -> Unit,
     onOpenReader: () -> Unit,
     onOpenReaderDirect: () -> Unit,
     onOpenChapterSelect: () -> Unit
@@ -137,6 +139,7 @@ fun MangaDetailScreen(
     val isLoading by viewModel.isLoading.collectAsState()
     val chapters by viewModel.chapters.collectAsState()
     val readChapterIndices by viewModel.readChapterIndices.collectAsState()
+    val chapterImages by viewModel.chapterImages.collectAsState()
     // MangaDex-derived counts - used as fallbacks when AniList doesn't have them.
     val mangaDexChapterCount by viewModel.mangaDexChapterCount.collectAsState()
     val mangaDexVolumeCount by viewModel.mangaDexVolumeCount.collectAsState()
@@ -150,6 +153,17 @@ fun MangaDetailScreen(
     }
     var showStatusMenu by remember { mutableStateOf(false) }
     var showChapterDialog by remember { mutableStateOf(false) }
+    var isContinueReading by remember { mutableStateOf(false) }
+
+    // Navigate to reader once chapter images finish loading after pressing
+    // the continue reading button. The loading overlay blocks interaction
+    // until this fires.
+    LaunchedEffect(isContinueReading, isLoading, chapterImages) {
+        if (isContinueReading && chapterImages is UiState.Success) {
+            isContinueReading = false
+            onOpenReaderDirect()
+        }
+    }
 
     fun refreshTracking() {
         detail?.let { d ->
@@ -218,7 +232,8 @@ fun MangaDetailScreen(
                         showChapterDialog = showChapterDialog,
                         onChapterDialogToggle = { showChapterDialog = it },
                         onStartReading = {
-                            viewModel.continueFromCurrentManga { onOpenReaderDirect() }
+                            isContinueReading = true
+                            viewModel.continueFromCurrentManga()
                         },
                         onOpenChapterSelect = {
                             showChapterSelect = !showChapterSelect
@@ -322,12 +337,29 @@ fun MangaDetailScreen(
             modifier = Modifier
                 .align(Alignment.TopStart)
                 .windowInsetsPadding(WindowInsets.statusBars)
+                .padding(start = 4.dp, top = 8.dp)
         ) {
             Icon(
                 Icons.AutoMirrored.Filled.ArrowBack,
                 contentDescription = "Back",
                 tint = Color.White
             )
+        }
+
+        if (detail != null && (isLoading || isContinueReading)) {
+            Box(
+                modifier = Modifier
+                    .fillMaxSize()
+                    .background(Color.Black.copy(alpha = 0.7f))
+                    .clickable(enabled = false) {},
+                contentAlignment = Alignment.Center
+            ) {
+                Column(horizontalAlignment = Alignment.CenterHorizontally) {
+                    CircularProgressIndicator(color = BlueAccent)
+                    Spacer(modifier = Modifier.height(16.dp))
+                    Text("Loading...", color = Color.White)
+                }
+            }
         }
 
         if (showChapterDialog) {
@@ -351,26 +383,37 @@ fun MangaDetailScreen(
 private fun HeaderSection(detail: AniListMangaDetail, fallbackCoverUrl: String?) {
     val coverModel = detail.coverExtraLarge ?: detail.coverLarge ?: fallbackCoverUrl
 
-    Box(modifier = Modifier.fillMaxWidth()) {
+    Box(modifier = Modifier.fillMaxWidth().height(300.dp).clipToBounds()) {
+        val bannerHeight = 160.dp
+        val coverHeightDp = (120 * 0.7f).dp
+        val bannerOffsetY = (300.dp - 16.dp - coverHeightDp / 2 - bannerHeight / 2)
+
         if (detail.bannerImage != null) {
             AsyncImage(
                 model = detail.bannerImage,
                 contentDescription = null,
-                modifier = Modifier.fillMaxWidth().height(300.dp),
-                contentScale = ContentScale.FillWidth
+                modifier = Modifier
+                    .fillMaxWidth()
+                    .height(bannerHeight)
+                    .offset(y = bannerOffsetY),
+                contentScale = ContentScale.Crop
             )
         } else if (coverModel != null) {
             AsyncImage(
                 model = coverModel,
                 contentDescription = null,
-                modifier = Modifier.fillMaxWidth().height(300.dp),
-                contentScale = ContentScale.FillWidth
+                modifier = Modifier
+                    .fillMaxWidth()
+                    .height(bannerHeight)
+                    .offset(y = bannerOffsetY),
+                contentScale = ContentScale.Crop
             )
         } else {
             Box(
                 modifier = Modifier
                     .fillMaxWidth()
-                    .height(300.dp)
+                    .height(bannerHeight)
+                    .offset(y = bannerOffsetY)
                     .background(
                         Brush.linearGradient(
                             0f to DarkSurface,

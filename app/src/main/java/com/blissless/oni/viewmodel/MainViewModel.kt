@@ -881,7 +881,7 @@ class MainViewModel(private val context: Context) : ViewModel() {
         }
     }
 
-    fun continueFromCurrentManga(onReady: () -> Unit) {
+    fun continueFromCurrentManga() {
         val mangaDetail = _mangaDetail.value ?: return
         val mediaId = currentMediaId ?: return
         val mangaId = currentMangaId ?: return
@@ -910,9 +910,9 @@ class MainViewModel(private val context: Context) : ViewModel() {
                 _selectedChapterIndex.value = safeChapterIndex
                 _isChapterRead.value = safeChapterIndex > 0
                 loadChapterImages(chapter.url)
-                onReady()
+            } else {
+                _isLoading.value = false
             }
-            _isLoading.value = false
             return
         }
 
@@ -930,7 +930,6 @@ class MainViewModel(private val context: Context) : ViewModel() {
                 _selectedChapterIndex.value = safeChapterIndex
                 _isChapterRead.value = safeChapterIndex > 0
                 loadChapterImages(chapter.url)
-                onReady()
             }
         }
     }

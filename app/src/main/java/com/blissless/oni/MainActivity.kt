@@ -155,10 +155,6 @@ fun OniApp(viewModel: MainViewModel) {
                                 currentScreen = null
                                 viewModel.clearMangaDetail()
                             },
-                            onStartReading = {
-                                viewModel.startReading()
-                                currentScreen = Screen.Reader
-                            },
                             onOpenReader = {
                                 currentScreen = Screen.Reader
                             },
