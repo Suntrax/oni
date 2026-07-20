@@ -1419,44 +1419,51 @@ class MainViewModel(private val context: Context) : ViewModel() {
             return
         }
 
+        if (_selectedExtensionAuthority.value == null) {
+            _chapterImages.value = UiState.Error(
+                "No extension selected. Install and select an extension in Settings."
+            )
+            _isLoading.value = false
+            return
+        }
+
         viewModelScope.launch {
             _chapterImages.value = UiState.Loading
 
             // All chapter images are loaded via the user's selected extension.
-            val authority = _selectedExtensionAuthority.value
-            if (authority != null) {
-                val chapter = _chapters.value.getOrNull(_selectedChapterIndex.value)
-                val title = chapter?.title ?: ""
-                // Extract just the chapter number from the title.
-                // Title format: "Chapter 346" or "Chapter 346.2: Some Title"
-                // → chapterParam = "346" or "346.2"
-                val chapterParam = title.removePrefix("Chapter ").substringBefore(":").trim()
-                val mangaTitle = currentMangaTitle
-                    ?: _mangaDetail.value?.titleEnglish
-                    ?: _mangaDetail.value?.titleRomaji
-                    ?: ""
-                if (mangaTitle.isNotBlank() && chapterParam.isNotBlank()) {
-                    log("LOAD", "Fetching via extension: title='$title' -> chapterParam='$chapterParam' mangaTitle='$mangaTitle'")
-                    val extResult = withContext(Dispatchers.IO) {
-                        fetchImagesFromExtension(mangaTitle, chapterParam, authority)
-                    }
-                    extResult.onSuccess { images ->
-                        val ci = ChapterImages(chapterUrl, images)
-                        log("LOAD", "Extension success: ${images.size} images for $chapterUrl")
-                        _chapterImages.value = UiState.Success(ci)
-                        _isLoading.value = false
-                        return@launch
-                    }
-                    log("LOAD", "Extension failed: ${extResult.exceptionOrNull()?.message}")
+            val authority = _selectedExtensionAuthority.value ?: run {
+                _chapterImages.value = UiState.Error(
+                    "No extension selected. Install and select an extension in Settings."
+                )
+                _isLoading.value = false
+                return@launch
+            }
+            val chapter = _chapters.value.getOrNull(_selectedChapterIndex.value)
+            val title = chapter?.title ?: ""
+            // Extract just the chapter number from the title.
+            // Title format: "Chapter 346" or "Chapter 346.2: Some Title"
+            // → chapterParam = "346" or "346.2"
+            val chapterParam = title.removePrefix("Chapter ").substringBefore(":").trim()
+            val mangaTitle = currentMangaTitle
+                ?: _mangaDetail.value?.titleEnglish
+                ?: _mangaDetail.value?.titleRomaji
+                ?: ""
+            if (mangaTitle.isNotBlank() && chapterParam.isNotBlank()) {
+                log("LOAD", "Fetching via extension: title='$title' -> chapterParam='$chapterParam' mangaTitle='$mangaTitle'")
+                val extResult = withContext(Dispatchers.IO) {
+                    fetchImagesFromExtension(mangaTitle, chapterParam, authority)
                 }
+                extResult.onSuccess { images ->
+                    val ci = ChapterImages(chapterUrl, images)
+                    log("LOAD", "Extension success: ${images.size} images for $chapterUrl")
+                    _chapterImages.value = UiState.Success(ci)
+                    _isLoading.value = false
+                    return@launch
+                }
+                log("LOAD", "Extension failed: ${extResult.exceptionOrNull()?.message}")
             }
 
-            _chapterImages.value = UiState.Error(
-                if (authority == null)
-                    "No extension selected. Install and select an extension in Settings."
-                else
-                    "Failed to load chapter images"
-            )
+            _chapterImages.value = UiState.Error("Failed to load chapter images")
             _isLoading.value = false
         }
     }

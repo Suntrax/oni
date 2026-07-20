@@ -1,5 +1,6 @@
 package com.blissless.oni.ui.screens
 
+import android.widget.Toast
 import androidx.activity.compose.BackHandler
 import androidx.compose.foundation.BorderStroke
 import androidx.compose.foundation.background
@@ -91,6 +92,7 @@ import androidx.compose.ui.graphics.Brush
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.vector.ImageVector
 import androidx.compose.ui.layout.ContentScale
+import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.input.KeyboardType
 import androidx.compose.ui.text.style.TextAlign
@@ -154,14 +156,25 @@ fun MangaDetailScreen(
     var showStatusMenu by remember { mutableStateOf(false) }
     var showChapterDialog by remember { mutableStateOf(false) }
     var isContinueReading by remember { mutableStateOf(false) }
+    val selectedExtensionAuthority by viewModel.selectedExtensionAuthority.collectAsState()
+    val context = LocalContext.current
 
     // Navigate to reader once chapter images finish loading after pressing
     // the continue reading button. The loading overlay blocks interaction
-    // until this fires.
+    // until this fires. Also reset the flag on error so the overlay dismisses
+    // (e.g. no extension selected).
     LaunchedEffect(isContinueReading, isLoading, chapterImages) {
-        if (isContinueReading && chapterImages is UiState.Success) {
-            isContinueReading = false
-            onOpenReaderDirect()
+        if (isContinueReading) {
+            when (chapterImages) {
+                is UiState.Success -> {
+                    isContinueReading = false
+                    onOpenReaderDirect()
+                }
+                is UiState.Error -> {
+                    isContinueReading = false
+                }
+                else -> {}
+            }
         }
     }
 
@@ -232,14 +245,22 @@ fun MangaDetailScreen(
                         showChapterDialog = showChapterDialog,
                         onChapterDialogToggle = { showChapterDialog = it },
                         onStartReading = {
-                            isContinueReading = true
-                            viewModel.continueFromCurrentManga()
+                            if (selectedExtensionAuthority == null) {
+                                Toast.makeText(context, "Select a default extension in Settings first", Toast.LENGTH_SHORT).show()
+                            } else {
+                                isContinueReading = true
+                                viewModel.continueFromCurrentManga()
+                            }
                         },
                         onOpenChapterSelect = {
-                            showChapterSelect = !showChapterSelect
-                            if (showChapterSelect) {
-                                viewModel.showChapterListOnly()
-                                onOpenReader()
+                            if (selectedExtensionAuthority == null) {
+                                Toast.makeText(context, "Select a default extension in Settings first", Toast.LENGTH_SHORT).show()
+                            } else {
+                                showChapterSelect = !showChapterSelect
+                                if (showChapterSelect) {
+                                    viewModel.showChapterListOnly()
+                                    onOpenReader()
+                                }
                             }
                         },
                         onStatusChange = { status ->

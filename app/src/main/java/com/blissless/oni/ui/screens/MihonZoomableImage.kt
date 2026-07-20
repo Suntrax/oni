@@ -93,6 +93,13 @@ fun MihonZoomableImage(
      */
     onSingleTap: ((Offset) -> Unit)? = null,
     /**
+     * When false, all gesture handling (tap, double-tap-zoom, pinch, pan) is
+     * skipped. The image is displayed without any interactive behaviour. Used
+     * by the vertical scroll reader where LazyColumn handles scrolling and
+     * zoom gestures would conflict.
+     */
+    gesturesEnabled: Boolean = true,
+    /**
      * Notifies the caller whenever the image's zoom state changes. `true` means
      * the user has zoomed in (scale > 1); `false` means back to 1x. The paged
      * reader uses this to disable HorizontalPager swipe while zoomed, so the
@@ -155,6 +162,12 @@ fun MihonZoomableImage(
     // clamps. Updated via onSizeChanged below. Stays Size.Zero until the first
     // layout pass completes.
     var layoutSize by remember { mutableStateOf(Size.Zero) }
+
+    // Tracks whether the most recent single-finger gesture was primarily
+    // vertical. Used to prevent fast top-to-bottom swipes from being
+    // misinterpreted as taps by detectTapGestures (which would trigger
+    // page navigation in the paged reader).
+    var lastGestureWasVertical by remember { mutableStateOf(false) }
 
     // Notify the caller when zoom state crosses the 1× boundary. We use a
     // snapshotFlow so this only fires on actual state changes, not on every
@@ -228,11 +241,203 @@ fun MihonZoomableImage(
             .onSizeChanged { intSize ->
                 layoutSize = intSize.toSize()
             }
+            .then(
+                if (gesturesEnabled) {
+                    Modifier
+                        // Tap detector first so a quick double-tap is recognised even if
+                        // the finger drifted a few px between presses.
+                        .pointerInput(Unit) {
+                            detectTapGestures(
+                                onTap = { tap ->
+                                    // Ignore taps that were actually fast vertical swipes.
+                                    // The awaitEachGesture block above tracks gesture
+                                    // direction; if the finger moved primarily vertically
+                                    // we treat this as a scroll attempt, not a tap.
+                                    if (!lastGestureWasVertical) {
+                                        onSingleTap?.invoke(tap)
+                                    }
+                                },
+                                onDoubleTap = { tap ->
+                                    // If layout isn't ready yet, ignore — can't compute
+                                    // focal point without bounds.
+                                    if (!isReady()) return@detectTapGestures
+                                    // Cancel any in-progress programmatic animation so the
+                                    // new double-tap starts from the CURRENT visible state,
+                                    // not from a stale animation target.
+                                    cancelRunningAnimation()
+                                    animatedJob = scope.launch {
+                                        // Capture the START state before computing targets.
+                                        val s0 = scale
+                                        val ox0 = offsetX
+                                        val oy0 = offsetY
+
+                                        // Compute the TARGET state.
+                                        val s1: Float
+                                        val ox1: Float
+                                        val oy1: Float
+                                        if (s0 > 1.01f) {
+                                            // Already zoomed → reset to 1×
+                                            s1 = MIN_ZOOM
+                                            ox1 = 0f
+                                            oy1 = 0f
+                                        } else {
+                                            // At 1× → zoom to 2× anchored on the tap point.
+                                            s1 = DOUBLE_TAP_ZOOM
+                                            val target = focalAdjust(tap, s0, s1, Offset(ox0, oy0))
+                                            val (cx, cy) = clampOffset(target.x, target.y, s1)
+                                            ox1 = cx
+                                            oy1 = cy
+                                        }
+
+                                        animate(
+                                            initialValue = 0f,
+                                            targetValue = 1f,
+                                            animationSpec = tween(ANIM_DURATION_MS)
+                                        ) { progress, _ ->
+                                            scale = s0 + (s1 - s0) * progress
+                                            offsetX = ox0 + (ox1 - ox0) * progress
+                                            offsetY = oy0 + (oy1 - oy0) * progress
+                                        }
+                                    }
+                                }
+                            )
+                        }
+                        .pointerInput(Unit) {
+                            awaitEachGesture {
+                                awaitFirstDown(requireUnconsumed = false)
+                                var totalDragDistance = 0f
+                                var totalHorizontalDistance = 0f
+                                var totalVerticalDistance = 0f
+                                var isDragging = false
+                                do {
+                                    val event = awaitPointerEvent()
+                                    val pointers = event.changes.count { it.pressed }
+
+                                    val panChange = event.calculatePan()
+                                    totalDragDistance += kotlin.math.abs(panChange.x) + kotlin.math.abs(panChange.y)
+                                    totalHorizontalDistance += kotlin.math.abs(panChange.x)
+                                    totalVerticalDistance += kotlin.math.abs(panChange.y)
+                                    if (totalDragDistance > 8f) {
+                                        isDragging = true
+                                    }
+
+                                    // Consume single-finger events ONLY when the user is
+                                    // actually dragging (panning the zoomed image). Quick
+                                    // taps fall through to the tap detector above so it
+                                    // can recognize double-taps.
+                                    // Two-finger events (pinch) are always consumed.
+                                    val shouldConsume = pointers >= 2 || (scale > 1.01f && isDragging)
+
+                                    if (shouldConsume) {
+                                        // Drop the gesture entirely if layout isn't ready.
+                                        if (!isReady()) {
+                                            event.changes.forEach { it.consume() }
+                                            continue
+                                        }
+
+                                        cancelRunningAnimation()
+
+                                        val zoomChange = event.calculateZoom()
+                                        val centroidRaw = event.calculateCentroid()
+
+                                        val centroid = if (centroidRaw.x.isFinite() && centroidRaw.y.isFinite()) {
+                                            centroidRaw
+                                        } else {
+                                            NO_FOCAL
+                                        }
+
+                                        val safeZoomChange = if (zoomChange.isFinite() && zoomChange > 0f) zoomChange else 1f
+
+                                        val s0 = scale
+                                        val s1 = (s0 * safeZoomChange).coerceIn(MIN_ZOOM, MAX_ZOOM)
+
+                                        val focalOffset = focalAdjust(
+                                            focal = centroid,
+                                            s0 = s0,
+                                            s1 = s1,
+                                            currentOffset = Offset(offsetX, offsetY)
+                                        )
+                                        val safePanX = if (panChange.x.isFinite()) panChange.x else 0f
+                                        val safePanY = if (panChange.y.isFinite()) panChange.y else 0f
+                                        val rawOffset = Offset(
+                                            focalOffset.x + safePanX,
+                                            focalOffset.y + safePanY
+                                        )
+
+                                        val (cx, cy) = clampOffset(rawOffset.x, rawOffset.y, s1)
+                                        scale = s1
+                                        offsetX = cx
+                                        offsetY = cy
+                                        event.changes.forEach { it.consume() }
+                                    }
+                                } while (event.changes.any { it.pressed })
+
+                                // Record whether the gesture was primarily vertical so the
+                                // tap detector (see detectTapGestures above) can ignore
+                                // fast top-to-bottom swipes that it would otherwise
+                                // misinterpret as single taps.
+                                if (!isDragging) {
+                                    lastGestureWasVertical = totalVerticalDistance > totalHorizontalDistance * 1.5f
+                                }
+
+                                // ---- Snap-back / safety reset on gesture end ----
+                                val finalScale = scale
+                                val finalOffsetX = offsetX
+                                val finalOffsetY = offsetY
+                                val transformBroken = finalScale.isNaN() || finalScale.isInfinite() ||
+                                    finalOffsetX.isNaN() || finalOffsetX.isInfinite() ||
+                                    finalOffsetY.isNaN() || finalOffsetY.isInfinite()
+
+                                when {
+                                    // Hard NaN/Infinity reset — must snap immediately so
+                                    // the user isn't stuck on a black frame.
+                                    transformBroken -> resetTransform()
+                                    // Scale ended at/below MIN — reset offset too so the
+                                    // image is centered when fully zoomed out. Animate all
+                                    // three values to their targets in lockstep.
+                                    finalScale <= MIN_ZOOM -> {
+                                        cancelRunningAnimation()
+                                        animatedJob = scope.launch {
+                                            val ox0 = offsetX
+                                            val oy0 = offsetY
+                                            animate(
+                                                initialValue = 0f,
+                                                targetValue = 1f,
+                                                animationSpec = tween(ANIM_DURATION_MS)
+                                            ) { progress, _ ->
+                                                scale = finalScale + (MIN_ZOOM - finalScale) * progress
+                                                offsetX = ox0 + (0f - ox0) * progress
+                                                offsetY = oy0 + (0f - oy0) * progress
+                                            }
+                                        }
+                                    }
+                                    // Otherwise: clamp offset so the image doesn't
+                                    // overshoot the viewport boundaries.
+                                    else -> {
+                                        val (cx, cy) = clampOffset(finalOffsetX, finalOffsetY, finalScale)
+                                        if (cx != finalOffsetX || cy != finalOffsetY) {
+                                            offsetX = cx
+                                            offsetY = cy
+                                        }
+                                    }
+                                }
+                            }
+                        }
+                } else Modifier
+            )
             // Tap detector first so a quick double-tap is recognised even if
             // the finger drifted a few px between presses.
             .pointerInput(Unit) {
                 detectTapGestures(
-                    onTap = { tap -> onSingleTap?.invoke(tap) },
+                    onTap = { tap ->
+                        // Ignore taps that were actually fast vertical swipes.
+                        // The awaitEachGesture block above tracks gesture
+                        // direction; if the finger moved primarily vertically
+                        // we treat this as a scroll attempt, not a tap.
+                        if (!lastGestureWasVertical) {
+                            onSingleTap?.invoke(tap)
+                        }
+                    },
                     onDoubleTap = { tap ->
                         // If layout isn't ready yet, ignore — can't compute
                         // focal point without bounds.
@@ -297,8 +502,10 @@ fun MihonZoomableImage(
             }
             .pointerInput(Unit) {
                 awaitEachGesture {
-                    awaitFirstDown()
+                    awaitFirstDown(requireUnconsumed = false)
                     var totalDragDistance = 0f
+                    var totalHorizontalDistance = 0f
+                    var totalVerticalDistance = 0f
                     var isDragging = false
                     do {
                         val event = awaitPointerEvent()
@@ -314,6 +521,8 @@ fun MihonZoomableImage(
                         // pass through to the detector.
                         val panChange = event.calculatePan()
                         totalDragDistance += kotlin.math.abs(panChange.x) + kotlin.math.abs(panChange.y)
+                        totalHorizontalDistance += kotlin.math.abs(panChange.x)
+                        totalVerticalDistance += kotlin.math.abs(panChange.y)
                         if (totalDragDistance > 8f) {
                             isDragging = true
                         }
@@ -386,6 +595,14 @@ fun MihonZoomableImage(
                             event.changes.forEach { it.consume() }
                         }
                     } while (event.changes.any { it.pressed })
+
+                    // Record whether the gesture was primarily vertical so the
+                    // tap detector (see detectTapGestures above) can ignore
+                    // fast top-to-bottom swipes that it would otherwise
+                    // misinterpret as single taps.
+                    if (!isDragging) {
+                        lastGestureWasVertical = totalVerticalDistance > totalHorizontalDistance * 1.5f
+                    }
 
                     // ---- Snap-back / safety reset on gesture end ----
                     val finalScale = scale

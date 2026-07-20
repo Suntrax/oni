@@ -1,5 +1,6 @@
 package com.blissless.oni.ui.screens
 
+import android.widget.Toast
 import androidx.activity.compose.BackHandler
 import androidx.compose.animation.AnimatedVisibility
 import androidx.compose.animation.core.animateFloatAsState
@@ -71,6 +72,7 @@ import androidx.compose.ui.draw.clip
 import androidx.compose.ui.graphics.Brush
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.graphicsLayer
+import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.text.TextStyle
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextOverflow
@@ -115,6 +117,9 @@ fun ReaderScreen(
     val syncThreshold by viewModel.anilistSyncThreshold.collectAsState()
     val resumeScrollProgress by viewModel.resumeScrollProgress.collectAsState()
     val readerMode by viewModel.readerMode.collectAsState()
+    val selectedExtensionAuthority by viewModel.selectedExtensionAuthority.collectAsState()
+
+    val context = LocalContext.current
 
     // Tracks the page index the user is currently on while in a paged reader
     // mode. Updated by the PagedMangaReader's onPageChanged callback. Used to
@@ -381,6 +386,16 @@ fun ReaderScreen(
                         viewModel.selectChapter(it)
                         isShowingChapterList = false
                     },
+                    onContinueReading = {
+                        if (selectedExtensionAuthority == null) {
+                            Toast.makeText(context, "Select a default extension in Settings first", Toast.LENGTH_SHORT).show()
+                        } else {
+                            nextChapterToRead?.let { idx ->
+                                viewModel.selectChapter(idx)
+                                isShowingChapterList = false
+                            }
+                        }
+                    },
                     modifier = Modifier.padding(paddingValues)
                 )
             }
@@ -424,9 +439,8 @@ fun ReaderScreen(
                                     modifier = Modifier
                                         .fillMaxWidth()
                                         .heightIn(min = 50.dp),
-                                    fillWidth = true
-                                    // No onSingleTap in vertical mode -- single tap
-                                    // does nothing, matching the original reader.
+                                    fillWidth = true,
+                                    gesturesEnabled = false
                                 )
                             }
                         }
@@ -501,6 +515,16 @@ fun ReaderScreen(
                         viewModel.selectChapter(it)
                         isShowingChapterList = false
                     },
+                    onContinueReading = {
+                        if (selectedExtensionAuthority == null) {
+                            Toast.makeText(context, "Select a default extension in Settings first", Toast.LENGTH_SHORT).show()
+                        } else {
+                            nextChapterToRead?.let { idx ->
+                                viewModel.selectChapter(idx)
+                                isShowingChapterList = false
+                            }
+                        }
+                    },
                     modifier = Modifier.padding(paddingValues)
                 )
             }
@@ -515,7 +539,8 @@ fun ChapterListWithGroups(
     readChapterIndices: Set<Int>,
     nextChapterToRead: Int?,
     onChapterClick: (Int) -> Unit,
-    modifier: Modifier = Modifier
+    modifier: Modifier = Modifier,
+    onContinueReading: (() -> Unit)? = null
 ) {
     if (chapters.isEmpty()) {
         Box(
@@ -586,8 +611,8 @@ fun ChapterListWithGroups(
                     totalCount = totalCount,
                     progress = progress,
                     nextChapterToRead = nextChapterToRead,
-                    onContinueReading = {
-                        nextChapterToRead?.let { onChapterClick(it) }
+                    onContinueReading = onContinueReading ?: {
+                        if (nextChapterToRead != null) onChapterClick(nextChapterToRead!!)
                     }
                 )
             }
