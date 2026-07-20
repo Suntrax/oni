@@ -618,7 +618,7 @@ private fun UpdateStatusSection(state: UpdateUiState, viewModel: UpdateViewModel
                 Row(verticalAlignment = Alignment.CenterVertically) {
                     Icon(Icons.Default.Update, contentDescription = null, tint = BlueLight, modifier = Modifier.size(18.dp))
                     Spacer(Modifier.width(8.dp))
-                    Text("v${state.release.tagName} available", color = BlueLight, style = MaterialTheme.typography.bodySmall, fontWeight = FontWeight.Medium)
+                    Text("${state.release.tagName} available", color = BlueLight, style = MaterialTheme.typography.bodySmall, fontWeight = FontWeight.Medium)
                 }
                 Spacer(Modifier.height(10.dp))
                 Button(
