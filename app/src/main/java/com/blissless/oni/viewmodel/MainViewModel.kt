@@ -271,6 +271,13 @@ class MainViewModel(private val context: Context) : ViewModel() {
                 }
                 if (cmp > 0) {
                     _pendingUpdateRelease.value = release
+                    withContext(Dispatchers.Main) {
+                        android.widget.Toast.makeText(
+                            context,
+                            "Update available: ${release.tagName}",
+                            android.widget.Toast.LENGTH_LONG
+                        ).show()
+                    }
                 }
             } catch (_: Exception) { }
         }
