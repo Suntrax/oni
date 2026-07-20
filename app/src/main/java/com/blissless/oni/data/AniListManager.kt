@@ -790,7 +790,8 @@ class AniListManager(private val context: Context) {
                     currentChapterIndex = (entry.progress - 1).coerceAtLeast(0),
                     totalChapters = entry.chapters ?: existing.totalChapters,
                     lastReadTimestamp = System.currentTimeMillis(),
-                    anilistMediaId = entry.mediaId
+                    anilistMediaId = entry.mediaId,
+                    scrollProgress = 0f
                 )
                 trackingManager.updateTracking(updated)
             } else {
