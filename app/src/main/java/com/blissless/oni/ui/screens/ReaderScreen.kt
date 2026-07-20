@@ -20,6 +20,7 @@ import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.PaddingValues
 import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.Spacer
+import androidx.compose.foundation.layout.aspectRatio
 import androidx.compose.foundation.layout.fillMaxHeight
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
@@ -438,7 +439,7 @@ fun ReaderScreen(
                                     contentDescription = "Page ${index + 1}",
                                     modifier = Modifier
                                         .fillMaxWidth()
-                                        .heightIn(min = 50.dp),
+                                        .aspectRatio(7f / 10f),
                                     fillWidth = true,
                                     gesturesEnabled = false
                                 )
