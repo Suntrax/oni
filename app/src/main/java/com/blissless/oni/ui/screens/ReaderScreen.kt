@@ -179,9 +179,19 @@ fun ReaderScreen(
     // need when switching to paged mode — pixel-based progress doesn't map
     // cleanly to page indices when pages have unequal heights.
     LaunchedEffect(listState) {
-        snapshotFlow { listState.firstVisibleItemIndex }
-            .distinctUntilChanged()
-            .collect { index -> currentPageIndex = index }
+        snapshotFlow { listState.layoutInfo }
+            .collect { layoutInfo ->
+                val visibleItems = layoutInfo.visibleItemsInfo
+                if (visibleItems.isEmpty()) return@collect
+                val best = visibleItems.maxByOrNull { item ->
+                    val overlapTop = maxOf(item.offset, layoutInfo.viewportStartOffset)
+                    val overlapBottom = minOf(item.offset + item.size, layoutInfo.viewportEndOffset)
+                    maxOf(0, overlapBottom - overlapTop)
+                }
+                if (best != null) {
+                    currentPageIndex = best.index
+                }
+            }
     }
 
     // Scroll to saved resume position after images load
