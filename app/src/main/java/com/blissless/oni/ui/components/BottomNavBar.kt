@@ -17,7 +17,7 @@ import androidx.compose.foundation.layout.width
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.filled.Explore
 import androidx.compose.material.icons.filled.Home
-import androidx.compose.material.icons.filled.Search
+import androidx.compose.material.icons.filled.Download
 import androidx.compose.material.icons.filled.Settings
 import androidx.compose.material3.Icon
 import androidx.compose.material3.MaterialTheme
@@ -36,8 +36,8 @@ fun BottomNavBar(
     onNavigate: (String) -> Unit,
     modifier: Modifier = Modifier
 ) {
-    val items = listOf("Explore", "Home", "Search", "Settings")
-    val icons = listOf(Icons.Default.Explore, Icons.Default.Home, Icons.Default.Search, Icons.Default.Settings)
+    val items = listOf("Explore", "Home", "Downloads", "Settings")
+    val icons = listOf(Icons.Default.Explore, Icons.Default.Home, Icons.Default.Download, Icons.Default.Settings)
     val selectedIndex = items.indexOfFirst { it.lowercase() == currentRoute }
 
     Surface(

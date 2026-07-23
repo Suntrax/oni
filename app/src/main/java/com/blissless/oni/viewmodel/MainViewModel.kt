@@ -246,6 +246,15 @@ class MainViewModel(private val context: Context) : ViewModel() {
         _monochromeTheme.value = enabled
     }
 
+    // OLED theme
+    private val _oledTheme = MutableStateFlow(settingsManager.getOledTheme())
+    val oledTheme: StateFlow<Boolean> = _oledTheme.asStateFlow()
+
+    fun setOledTheme(enabled: Boolean) {
+        settingsManager.setOledTheme(enabled)
+        _oledTheme.value = enabled
+    }
+
     fun selectExtension(authority: String?) {
         settingsManager.setSelectedExtensionAuthority(authority)
         _selectedExtensionAuthority.value = authority

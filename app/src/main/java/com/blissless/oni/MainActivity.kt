@@ -31,6 +31,7 @@ import com.blissless.oni.ui.screens.ExploreScreen
 import com.blissless.oni.ui.screens.HomeScreen
 import com.blissless.oni.ui.screens.MangaDetailScreen
 import com.blissless.oni.ui.screens.ReaderScreen
+import com.blissless.oni.ui.screens.DownloadsScreen
 import com.blissless.oni.ui.screens.SearchScreen
 import com.blissless.oni.ui.screens.SettingsScreen
 import com.blissless.oni.ui.theme.OniTheme
@@ -50,10 +51,12 @@ class MainActivity : ComponentActivity() {
         setContent {
             val useMaterial3Color by viewModel.useMaterial3Color.collectAsState()
             val monochromeTheme by viewModel.monochromeTheme.collectAsState()
+            val oledTheme by viewModel.oledTheme.collectAsState()
 
             OniTheme(
                 useMaterial3Color = useMaterial3Color,
-                monochromeTheme = monochromeTheme
+                monochromeTheme = monochromeTheme,
+                oledTheme = oledTheme
             ) {
                 Surface(
                     modifier = Modifier.fillMaxSize(),
@@ -102,6 +105,7 @@ fun OniApp(viewModel: MainViewModel) {
 
     var currentScreenType by rememberSaveable { mutableStateOf<String?>(null) }
     var currentNavRoute by rememberSaveable { mutableStateOf("home") }
+    var showSearch by rememberSaveable { mutableStateOf(false) }
     val currentScreen: Screen? = when (currentScreenType) {
         "detail" -> Screen.Detail
         "reader" -> Screen.Reader
@@ -118,10 +122,8 @@ fun OniApp(viewModel: MainViewModel) {
         }
     }
 
-
-
-    LaunchedEffect(currentNavRoute) {
-        if (currentNavRoute != "search") {
+    LaunchedEffect(showSearch) {
+        if (!showSearch) {
             keyboardController?.hide()
         }
     }
@@ -134,7 +136,8 @@ fun OniApp(viewModel: MainViewModel) {
                     onMangaSelected = { manga ->
                         viewModel.selectManga(manga)
                         currentScreenType = "detail"
-                    }
+                    },
+                    onSearchClick = { showSearch = true }
                 )
                 "home" -> HomeScreen(
                     viewModel = viewModel,
@@ -154,18 +157,24 @@ fun OniApp(viewModel: MainViewModel) {
                     },
                     onRemoveResumeTracking = { track ->
                         viewModel.clearResumeProgress(track.mangaId)
-                    }
-                )
-                "search" -> SearchScreen(
-                    viewModel = viewModel,
-                    onMangaSelected = { manga ->
-                        viewModel.selectManga(manga)
-                        currentScreenType = "detail"
                     },
-                    isActive = currentNavRoute == "search"
+                    onSearchClick = { showSearch = true }
                 )
+                "downloads" -> DownloadsScreen()
                 "settings" -> SettingsScreen(viewModel = viewModel)
             }
+        }
+
+        if (showSearch && currentScreen == null) {
+            SearchScreen(
+                viewModel = viewModel,
+                onMangaSelected = { manga ->
+                    viewModel.selectManga(manga)
+                    currentScreenType = "detail"
+                    showSearch = false
+                },
+                isActive = showSearch
+            )
         }
 
         if (currentScreen != null) {

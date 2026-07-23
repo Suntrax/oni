@@ -16,6 +16,7 @@ class SettingsManager(context: Context) {
         private const val KEY_LOCK_READER_ROTATION = "lock_reader_rotation"
         private const val KEY_MATERIAL3_COLOR = "material3_color"
         private const val KEY_MONOCHROME_THEME = "monochrome_theme"
+        private const val KEY_OLED_THEME = "oled_theme"
         private const val DEFAULT_SYNC_THRESHOLD = 90
     }
 
@@ -86,6 +87,14 @@ class SettingsManager(context: Context) {
 
     fun setMonochromeTheme(enabled: Boolean) {
         prefs.edit().putBoolean(KEY_MONOCHROME_THEME, enabled).apply()
+    }
+
+    fun getOledTheme(): Boolean {
+        return prefs.getBoolean(KEY_OLED_THEME, false)
+    }
+
+    fun setOledTheme(enabled: Boolean) {
+        prefs.edit().putBoolean(KEY_OLED_THEME, enabled).apply()
     }
 }
 

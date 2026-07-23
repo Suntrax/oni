@@ -499,9 +499,9 @@ private fun SearchResultCard(
             Spacer(modifier = Modifier.height(6.dp))
 
             val displayTitle = when {
-                !manga.englishTitle.isNullOrBlank() -> manga.englishTitle
-                !manga.title.isNullOrBlank() -> manga.title
-                !manga.nativeTitle.isNullOrBlank() -> manga.nativeTitle
+                !manga.englishTitle.isNullOrBlank() && manga.englishTitle != "null" -> manga.englishTitle
+                !manga.title.isNullOrBlank() && manga.title != "null" -> manga.title
+                !manga.nativeTitle.isNullOrBlank() && manga.nativeTitle != "null" -> manga.nativeTitle
                 else -> "Unknown"
             }
             Text(

@@ -441,12 +441,12 @@ class AniListManager(private val context: Context) {
                 (0 until genresArray.length()).map { genresArray.getString(it) }
             } else null
             val romaji = title?.optString("romaji") ?: ""
-            val english = title?.optString("english")
+            val english = title?.optString("english")?.takeIf { it.isNotBlank() && it != "null" }
             results.add(AniListSearchResult(
                 id = media.optInt("id"),
-                title = english?.takeIf { it.isNotBlank() } ?: romaji,
+                title = english ?: romaji,
                 englishTitle = english,
-                nativeTitle = title?.optString("native"),
+                nativeTitle = title?.optString("native")?.takeIf { it.isNotBlank() && it != "null" },
                 coverExtraLarge = media.optJSONObject("coverImage")?.optString("extraLarge"),
                 coverUrl = media.optJSONObject("coverImage")?.optString("extraLarge") ?: media.optJSONObject("coverImage")?.optString("large"),
                 description = media.optString("description"),

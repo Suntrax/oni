@@ -25,12 +25,17 @@ import androidx.compose.foundation.pager.rememberPagerState
 import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material.icons.Icons
+import androidx.compose.material.icons.filled.CloudOff
+import androidx.compose.material.icons.filled.Search
+import androidx.compose.material.icons.filled.SignalWifiOff
 import androidx.compose.material.icons.filled.Star
 import androidx.compose.material3.Card
 import androidx.compose.material3.CardDefaults
 import androidx.compose.material3.CircularProgressIndicator
 import androidx.compose.material3.Icon
+import androidx.compose.material3.IconButton
 import androidx.compose.material3.MaterialTheme
+import androidx.compose.material3.Surface
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.LaunchedEffect
@@ -57,7 +62,8 @@ import kotlinx.coroutines.delay
 @Composable
 fun ExploreScreen(
     viewModel: MainViewModel,
-    onMangaSelected: (AniListSearchResult) -> Unit
+    onMangaSelected: (AniListSearchResult) -> Unit,
+    onSearchClick: () -> Unit = {}
 ) {
     val sections by viewModel.exploreSections.collectAsState()
     val isLoading by viewModel.isLoading.collectAsState()
@@ -87,28 +93,44 @@ fun ExploreScreen(
             }
         }
     } else {
-        LazyColumn(
-            modifier = Modifier.fillMaxSize(),
-            contentPadding = PaddingValues(bottom = 96.dp)
-        ) {
-            val trending = sections.firstOrNull { it.key == "trending" }
+        Box(modifier = Modifier.fillMaxSize()) {
+            LazyColumn(
+                modifier = Modifier.fillMaxSize(),
+                contentPadding = PaddingValues(bottom = 96.dp)
+            ) {
+                val trending = sections.firstOrNull { it.key == "trending" }
 
-            if (trending != null) {
-                item {
-                    FeaturedCarousel(
-                        section = trending,
-                        onMangaClick = onMangaSelected
-                    )
+                if (trending != null) {
+                    item {
+                        FeaturedCarousel(
+                            section = trending,
+                            onMangaClick = onMangaSelected
+                        )
+                    }
+                }
+
+                sections.filter { it.key != "trending" }.forEach { section ->
+                    item {
+                        SectionRow(
+                            section = section,
+                            onMangaClick = onMangaSelected
+                        )
+                    }
                 }
             }
 
-            sections.filter { it.key != "trending" }.forEach { section ->
-                item {
-                    SectionRow(
-                        section = section,
-                        onMangaClick = onMangaSelected
-                    )
-                }
+            IconButton(
+                onClick = onSearchClick,
+                modifier = Modifier
+                    .align(Alignment.TopEnd)
+                    .padding(top = 12.dp, end = 12.dp)
+                    .size(44.dp)
+            ) {
+                Icon(
+                    Icons.Default.Search,
+                    contentDescription = "Search",
+                    tint = MaterialTheme.colorScheme.onSurface
+                )
             }
         }
     }
@@ -307,27 +329,7 @@ fun SectionRow(
     onMangaClick: (AniListSearchResult) -> Unit
 ) {
     Column {
-        Row(
-            modifier = Modifier
-                .fillMaxWidth()
-                .padding(start = 16.dp, end = 16.dp, top = 20.dp, bottom = 8.dp),
-            horizontalArrangement = Arrangement.SpaceBetween,
-            verticalAlignment = Alignment.CenterVertically
-        ) {
-            Text(
-                text = section.title,
-                style = MaterialTheme.typography.titleMedium,
-                color = Color.White,
-                fontWeight = FontWeight.Bold,
-                letterSpacing = 0.3.sp
-            )
-            Text(
-                text = "${section.items.size} titles",
-                fontSize = 12.sp,
-                color = MaterialTheme.colorScheme.onSurfaceVariant,
-                letterSpacing = 0.2.sp
-            )
-        }
+        ExploreSectionTitle(title = section.title, count = section.items.size)
 
         LazyRow(
             contentPadding = PaddingValues(horizontal = 16.dp),
@@ -337,6 +339,63 @@ fun SectionRow(
                 MangaSmallCard(
                     manga = manga,
                     onClick = { onMangaClick(manga) }
+                )
+            }
+        }
+    }
+}
+
+@Composable
+fun ExploreSectionTitle(
+    title: String,
+    count: Int,
+    iconTint: Color = MaterialTheme.colorScheme.primary
+) {
+    Surface(
+        shape = RoundedCornerShape(14.dp),
+        color = MaterialTheme.colorScheme.surface,
+        tonalElevation = 1.dp,
+        shadowElevation = 1.dp,
+        modifier = Modifier
+            .fillMaxWidth()
+            .padding(horizontal = 16.dp)
+            .clip(RoundedCornerShape(14.dp))
+    ) {
+        Row(
+            verticalAlignment = Alignment.CenterVertically,
+            modifier = Modifier.padding(start = 4.dp, end = 12.dp, top = 8.dp, bottom = 8.dp)
+        ) {
+            Box(
+                modifier = Modifier
+                    .width(3.dp)
+                    .height(24.dp)
+                    .background(iconTint, RoundedCornerShape(2.dp))
+            )
+            Spacer(modifier = Modifier.width(12.dp))
+            Icon(
+                imageVector = Icons.Default.Star,
+                contentDescription = null,
+                tint = iconTint,
+                modifier = Modifier.size(18.dp)
+            )
+            Spacer(modifier = Modifier.width(8.dp))
+            Text(
+                title,
+                style = MaterialTheme.typography.titleMedium,
+                fontWeight = FontWeight.SemiBold,
+                color = MaterialTheme.colorScheme.onSurface
+            )
+            Spacer(modifier = Modifier.weight(1f))
+            Surface(
+                shape = RoundedCornerShape(10.dp),
+                color = iconTint.copy(alpha = 0.12f)
+            ) {
+                Text(
+                    "$count",
+                    style = MaterialTheme.typography.labelSmall,
+                    fontWeight = FontWeight.SemiBold,
+                    color = iconTint,
+                    modifier = Modifier.padding(horizontal = 10.dp, vertical = 3.dp)
                 )
             }
         }
