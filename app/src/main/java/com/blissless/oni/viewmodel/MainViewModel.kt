@@ -219,6 +219,15 @@ class MainViewModel(private val context: Context) : ViewModel() {
         setReaderMode(next)
     }
 
+    // Lock reader rotation: when true the reader stays in portrait.
+    private val _lockReaderRotation = MutableStateFlow(settingsManager.getLockReaderRotation())
+    val lockReaderRotation: StateFlow<Boolean> = _lockReaderRotation.asStateFlow()
+
+    fun setLockReaderRotation(enabled: Boolean) {
+        settingsManager.setLockReaderRotation(enabled)
+        _lockReaderRotation.value = enabled
+    }
+
     fun selectExtension(authority: String?) {
         settingsManager.setSelectedExtensionAuthority(authority)
         _selectedExtensionAuthority.value = authority

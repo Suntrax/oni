@@ -1,6 +1,7 @@
 package com.blissless.oni
 
 import android.content.Intent
+import android.content.pm.ActivityInfo
 import android.os.Bundle
 import androidx.activity.ComponentActivity
 import androidx.activity.compose.setContent
@@ -15,7 +16,9 @@ import androidx.compose.material3.Surface
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.getValue
+import androidx.compose.runtime.collectAsState
 import androidx.compose.runtime.mutableStateOf
+import androidx.compose.runtime.saveable.rememberSaveable
 import androidx.compose.runtime.remember
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
@@ -89,10 +92,25 @@ sealed class Screen {
 @Composable
 fun OniApp(viewModel: MainViewModel) {
     val context = LocalContext.current
+    val lockRotation by viewModel.lockReaderRotation.collectAsState()
 
-    var currentScreen by remember { mutableStateOf<Screen?>(null) }
-    var currentNavRoute by remember { mutableStateOf("home") }
+    var currentScreenType by rememberSaveable { mutableStateOf<String?>(null) }
+    var currentNavRoute by rememberSaveable { mutableStateOf("home") }
+    val currentScreen: Screen? = when (currentScreenType) {
+        "detail" -> Screen.Detail
+        "reader" -> Screen.Reader
+        else -> null
+    }
     val keyboardController = LocalSoftwareKeyboardController.current
+
+    LaunchedEffect(lockRotation) {
+        val activity = context as? MainActivity ?: return@LaunchedEffect
+        activity.requestedOrientation = if (lockRotation) {
+            ActivityInfo.SCREEN_ORIENTATION_PORTRAIT
+        } else {
+            ActivityInfo.SCREEN_ORIENTATION_UNSPECIFIED
+        }
+    }
 
 
 
@@ -109,23 +127,23 @@ fun OniApp(viewModel: MainViewModel) {
                     viewModel = viewModel,
                     onMangaSelected = { manga ->
                         viewModel.selectManga(manga)
-                        currentScreen = Screen.Detail
+                        currentScreenType = "detail"
                     }
                 )
                 "home" -> HomeScreen(
                     viewModel = viewModel,
                     onMangaSelected = { manga ->
                         viewModel.selectManga(manga)
-                        currentScreen = Screen.Detail
+                        currentScreenType = "detail"
                     },
                     onContinueReading = { track ->
                         viewModel.continueFromTracking(track) {
-                            currentScreen = Screen.Reader
+                            currentScreenType = "reader"
                         }
                     },
                     onResumeReading = { track ->
                         viewModel.resumeFromTracking(track) {
-                            currentScreen = Screen.Reader
+                            currentScreenType = "reader"
                         }
                     },
                     onRemoveResumeTracking = { track ->
@@ -136,7 +154,7 @@ fun OniApp(viewModel: MainViewModel) {
                     viewModel = viewModel,
                     onMangaSelected = { manga ->
                         viewModel.selectManga(manga)
-                        currentScreen = Screen.Detail
+                        currentScreenType = "detail"
                     },
                     isActive = currentNavRoute == "search"
                 )
@@ -152,17 +170,17 @@ fun OniApp(viewModel: MainViewModel) {
                             viewModel = viewModel,
                             onBack = {
                                 viewModel.refreshTrackingLists()
-                                currentScreen = null
+                                currentScreenType = null
                                 viewModel.clearMangaDetail()
                             },
                             onOpenReader = {
-                                currentScreen = Screen.Reader
+                                currentScreenType = "reader"
                             },
                             onOpenReaderDirect = {
-                                currentScreen = Screen.Reader
+                                currentScreenType = "reader"
                             },
                             onOpenChapterSelect = {
-                                currentScreen = Screen.Reader
+                                currentScreenType = "reader"
                             }
                         )
                     }
@@ -172,7 +190,7 @@ fun OniApp(viewModel: MainViewModel) {
                             ReaderScreen(
                                 viewModel = viewModel,
                                 onBack = {
-                                    currentScreen = Screen.Detail
+                                    currentScreenType = "detail"
                                     viewModel.clearSelection()
                                 }
                             )

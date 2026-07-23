@@ -2,6 +2,13 @@ package com.blissless.oni.ui.screens
 
 import android.content.Intent
 import android.net.Uri
+import androidx.activity.compose.BackHandler
+import androidx.compose.animation.AnimatedContent
+import androidx.compose.animation.fadeIn
+import androidx.compose.animation.fadeOut
+import androidx.compose.animation.slideInHorizontally
+import androidx.compose.animation.slideOutHorizontally
+import androidx.compose.animation.togetherWith
 import androidx.compose.foundation.background
 import androidx.compose.foundation.border
 import androidx.compose.foundation.clickable
@@ -20,6 +27,7 @@ import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.foundation.verticalScroll
 import androidx.compose.material.icons.Icons
+import androidx.compose.material.icons.automirrored.filled.ArrowBack
 import androidx.compose.material.icons.automirrored.filled.ArrowForwardIos
 import androidx.compose.material.icons.filled.AccountCircle
 import androidx.compose.material.icons.filled.CheckCircle
@@ -35,16 +43,21 @@ import androidx.compose.material3.ButtonDefaults
 import androidx.compose.material3.Card
 import androidx.compose.material3.CardDefaults
 import androidx.compose.material3.CircularProgressIndicator
+import androidx.compose.material3.ExperimentalMaterial3Api
 import androidx.compose.material3.HorizontalDivider
 import androidx.compose.material3.Icon
+import androidx.compose.material3.IconButton
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.OutlinedButton
+import androidx.compose.material3.Scaffold
 import androidx.compose.material3.Slider
 import androidx.compose.material3.SliderDefaults
 import androidx.compose.material3.Switch
 import androidx.compose.material3.SwitchDefaults
 import androidx.compose.material3.Text
 import androidx.compose.material3.TextButton
+import androidx.compose.material3.TopAppBar
+import androidx.compose.material3.TopAppBarDefaults
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.collectAsState
@@ -83,39 +96,59 @@ import com.blissless.oni.update.UpdateViewModel
 import com.blissless.oni.viewmodel.MainViewModel
 import kotlin.math.roundToInt
 
+private sealed class SettingsNavRoute {
+    data object Main : SettingsNavRoute()
+    data object AccountSync : SettingsNavRoute()
+    data object Reader : SettingsNavRoute()
+    data object UpdatesAbout : SettingsNavRoute()
+    data object Extensions : SettingsNavRoute()
+}
+
 @Composable
 fun SettingsScreen(viewModel: MainViewModel) {
-    val anilistUsername by viewModel.anilistUsername.collectAsState()
-    val isSyncing by viewModel.isAniListSyncing.collectAsState()
-    val syncThreshold by viewModel.anilistSyncThreshold.collectAsState()
-    val showMergeDialog by viewModel.showMergeDialog.collectAsState()
-    val checkUpdatesOnStart by viewModel.checkUpdatesOnStart.collectAsState()
-    val extensions by viewModel.installedExtensions.collectAsState()
-    val selectedExtensionAuthority by viewModel.selectedExtensionAuthority.collectAsState()
-    val readerMode by viewModel.readerMode.collectAsState()
-    val context = LocalContext.current
+    var currentRoute by remember { mutableStateOf<SettingsNavRoute>(SettingsNavRoute.Main) }
 
-    val updateViewModel: UpdateViewModel = viewModel()
-    val updateState by updateViewModel.uiState.collectAsState()
-    val pendingUpdate by viewModel.pendingUpdateRelease.collectAsState()
-
-    LaunchedEffect(Unit) {
-        viewModel.checkAnilistSession()
-        viewModel.discoverExtensions()
+    BackHandler(enabled = currentRoute !is SettingsNavRoute.Main) {
+        currentRoute = SettingsNavRoute.Main
     }
 
-    LaunchedEffect(pendingUpdate) {
-        val release = pendingUpdate
-        if (release != null && updateState.release == null && !updateState.isChecking) {
-            updateViewModel.setRelease(release)
+    AnimatedContent(
+        targetState = currentRoute,
+        transitionSpec = {
+            if (targetState is SettingsNavRoute.Main) {
+                slideInHorizontally { -it } + fadeIn() togetherWith slideOutHorizontally { it } + fadeOut()
+            } else {
+                slideInHorizontally { it } + fadeIn() togetherWith slideOutHorizontally { -it } + fadeOut()
+            }
+        },
+        label = "settings_nav"
+    ) { route ->
+        when (route) {
+            is SettingsNavRoute.Main -> SettingsMainScreen(
+                onNavigate = { currentRoute = it }
+            )
+            is SettingsNavRoute.AccountSync -> AccountSyncScreen(
+                viewModel = viewModel,
+                onBack = { currentRoute = SettingsNavRoute.Main }
+            )
+            is SettingsNavRoute.Reader -> ReaderSettingsScreen(
+                viewModel = viewModel,
+                onBack = { currentRoute = SettingsNavRoute.Main }
+            )
+            is SettingsNavRoute.UpdatesAbout -> UpdatesAboutScreen(
+                viewModel = viewModel,
+                onBack = { currentRoute = SettingsNavRoute.Main }
+            )
+            is SettingsNavRoute.Extensions -> ExtensionsScreen(
+                viewModel = viewModel,
+                onBack = { currentRoute = SettingsNavRoute.Main }
+            )
         }
     }
+}
 
-    var showLogoutDialog by remember { mutableStateOf(false) }
-    var showGitHubDialog by remember { mutableStateOf(false) }
-    var showExtensionsDialog by remember { mutableStateOf(false) }
-    val githubUrl = "https://github.com/Suntrax/Oni"
-
+@Composable
+private fun SettingsMainScreen(onNavigate: (SettingsNavRoute) -> Unit) {
     Column(
         modifier = Modifier
             .fillMaxSize()
@@ -131,303 +164,257 @@ fun SettingsScreen(viewModel: MainViewModel) {
             letterSpacing = 0.5.sp,
             modifier = Modifier.padding(horizontal = 20.dp, vertical = 16.dp)
         )
-
         Spacer(Modifier.height(8.dp))
 
-        // Account Section
-        SettingsSectionHeader("Account")
-        SettingsCard {
-            if (anilistUsername != null) {
-                Row(
-                    modifier = Modifier
-                        .fillMaxWidth()
-                        .padding(horizontal = 16.dp, vertical = 12.dp),
-                    verticalAlignment = Alignment.CenterVertically
-                ) {
-                    Box(
-                        modifier = Modifier
-                            .size(40.dp)
-                            .clip(RoundedCornerShape(12.dp))
-                            .background(BlueAccent.copy(alpha = 0.15f)),
-                        contentAlignment = Alignment.Center
-                    ) {
-                        Icon(
-                            Icons.Default.AccountCircle,
-                            contentDescription = null,
-                            tint = BlueAccent,
-                            modifier = Modifier.size(24.dp)
-                        )
-                    }
-                    Spacer(Modifier.width(12.dp))
-                    Column(modifier = Modifier.weight(1f)) {
-                        Text("Logged in as $anilistUsername", color = SilverLight, style = MaterialTheme.typography.bodyLarge)
-                        Spacer(Modifier.height(4.dp))
-                        Row(verticalAlignment = Alignment.CenterVertically) {
-                            Box(
-                                modifier = Modifier
-                                    .clip(RoundedCornerShape(4.dp))
-                                    .background(BlueAccent.copy(alpha = 0.15f))
-                                    .padding(horizontal = 6.dp, vertical = 2.dp)
-                            ) {
-                                Text("AniList Auth", color = BlueLight, style = MaterialTheme.typography.labelSmall, fontWeight = FontWeight.Medium)
-                            }
-                        }
-                    }
-                    Text(
-                        "Logout",
-                        color = StatusDropped,
-                        style = MaterialTheme.typography.bodySmall,
-                        fontWeight = FontWeight.Medium,
-                        modifier = Modifier.clickable { showLogoutDialog = true }
-                    )
-                }
-                SettingsDivider()
-                Row(
-                    modifier = Modifier
-                        .fillMaxWidth()
-                        .padding(horizontal = 16.dp, vertical = 10.dp),
-                    verticalAlignment = Alignment.CenterVertically
-                ) {
-                    if (isSyncing) {
-                        CircularProgressIndicator(
-                            modifier = Modifier.size(20.dp),
-                            color = BlueAccent,
-                            strokeWidth = 2.dp
-                        )
-                        Spacer(Modifier.width(12.dp))
-                        Text("Syncing...", color = SilverDark, style = MaterialTheme.typography.bodySmall)
-                    } else {
-                        OutlinedButton(
-                            onClick = { viewModel.syncAnilistManga() },
-                            shape = RoundedCornerShape(12.dp)
-                        ) {
-                            Icon(Icons.Default.Sync, contentDescription = null, modifier = Modifier.size(18.dp), tint = BlueAccent)
-                            Spacer(Modifier.width(6.dp))
-                            Text("Sync Now", color = BlueAccent)
-                        }
-                    }
-                }
-            } else {
-                SettingsNavItem(
-                    icon = Icons.Default.AccountCircle,
-                    title = "AniList Account",
-                    subtitle = "Log in to sync your list",
-                    tint = BlueAccent,
-                    trailing = {
-                        Text("Login", color = BlueAccent, style = MaterialTheme.typography.bodySmall, fontWeight = FontWeight.Medium)
-                    },
-                    onClick = {
-                        val intent = Intent(Intent.ACTION_VIEW, Uri.parse(viewModel.getAnilistAuthUrl()))
-                        context.startActivity(intent)
-                    }
-                )
-            }
-        }
-
-        Spacer(Modifier.height(20.dp))
-        SettingsSectionHeader("Sync")
-        SettingsCard {
-            Column(
-                modifier = Modifier
-                    .fillMaxWidth()
-                    .padding(horizontal = 16.dp, vertical = 8.dp)
-            ) {
-                Row(
-                    modifier = Modifier.fillMaxWidth(),
-                    horizontalArrangement = Arrangement.SpaceBetween,
-                    verticalAlignment = Alignment.CenterVertically
-                ) {
-                    Text("Auto-sync Threshold", color = SilverLight, style = MaterialTheme.typography.bodyLarge)
-                    Text("$syncThreshold%", color = BlueAccent, style = MaterialTheme.typography.bodyMedium, fontWeight = FontWeight.Bold)
-                }
-                Text(
-                    "Sync progress to AniList after reading this % of a chapter",
-                    color = SilverDark,
-                    style = MaterialTheme.typography.bodySmall
-                )
-                Spacer(Modifier.height(8.dp))
-                Slider(
-                    value = syncThreshold.toFloat(),
-                    onValueChange = { viewModel.updateAnilistSyncThreshold(it.roundToInt()) },
-                    valueRange = 75f..100f,
-                    modifier = Modifier.fillMaxWidth(),
-                    colors = SliderDefaults.colors(
-                        thumbColor = BlueAccent,
-                        activeTrackColor = BlueAccent,
-                        inactiveTrackColor = DarkSurfaceVariant,
-                        inactiveTickColor = BlueAccent.copy(alpha = 0.3f)
-                    ),
-                    steps = 24
-                )
-            }
-        }
-
-        Spacer(Modifier.height(20.dp))
-
-        // Reader Section
-        SettingsSectionHeader("Reader")
-        SettingsCard {
-            Column(
-                modifier = Modifier
-                    .fillMaxWidth()
-                    .padding(horizontal = 16.dp, vertical = 12.dp)
-            ) {
-                Text("Reading Mode", color = SilverLight, style = MaterialTheme.typography.bodyLarge)
-                Text(
-                    "Choose how pages are laid out. Paged modes show one page per screen; vertical scrolls continuously.",
-                    color = SilverDark,
-                    style = MaterialTheme.typography.bodySmall
-                )
-                Spacer(Modifier.height(12.dp))
-
-                ReaderMode.entries.forEach { mode ->
-                    Row(
-                        modifier = Modifier
-                            .fillMaxWidth()
-                            .clickable { viewModel.setReaderMode(mode) }
-                            .padding(vertical = 10.dp),
-                        verticalAlignment = Alignment.CenterVertically
-                    ) {
-                        Box(
-                            modifier = Modifier
-                                .size(20.dp)
-                                .clip(RoundedCornerShape(10.dp))
-                                .background(
-                                    if (readerMode == mode) BlueAccent
-                                    else Color.Transparent
-                                )
-                                .border(
-                                    width = if (readerMode == mode) 0.dp else 1.dp,
-                                    color = if (readerMode == mode) BlueAccent else SilverDark,
-                                    shape = RoundedCornerShape(10.dp)
-                                ),
-                            contentAlignment = Alignment.Center
-                        ) {
-                            if (readerMode == mode) {
-                                Icon(
-                                    Icons.Default.CheckCircle,
-                                    contentDescription = null,
-                                    tint = Color.White,
-                                    modifier = Modifier.size(12.dp)
-                                )
-                            }
-                        }
-                        Spacer(Modifier.width(12.dp))
-                        Column(modifier = Modifier.weight(1f)) {
-                            Text(mode.displayLabel, color = SilverLight, style = MaterialTheme.typography.bodyMedium, fontWeight = FontWeight.Medium)
-                            Text(
-                                text = when (mode) {
-                                    ReaderMode.VERTICAL_SCROLL -> "Webtoon-style continuous scroll"
-                                    ReaderMode.LEFT_TO_RIGHT -> "One page per screen, swipe left for next"
-                                    ReaderMode.RIGHT_TO_LEFT -> "One page per screen, swipe right for next (manga style)"
-                                },
-                                color = SilverDark,
-                                style = MaterialTheme.typography.bodySmall
-                            )
-                        }
-                    }
-                }
-            }
-        }
-
-        Spacer(Modifier.height(20.dp))
-
-        // Updates Section
-        SettingsSectionHeader("Updates")
-        SettingsCard {
-            Column(modifier = Modifier.fillMaxWidth().padding(16.dp)) {
-                Row(
-                    modifier = Modifier.fillMaxWidth(),
-                    verticalAlignment = Alignment.CenterVertically,
-                    horizontalArrangement = Arrangement.SpaceBetween
-                ) {
-                    Text("Check for Updates on Start", color = SilverLight, style = MaterialTheme.typography.bodyLarge)
-                    Switch(
-                        checked = checkUpdatesOnStart,
-                        onCheckedChange = { viewModel.setCheckUpdatesOnStart(it) },
-                        colors = SwitchDefaults.colors(
-                            checkedThumbColor = SilverLight,
-                            checkedTrackColor = BlueAccent,
-                            uncheckedThumbColor = SilverDark,
-                            uncheckedTrackColor = DarkSurfaceVariant
-                        )
-                    )
-                }
-                Spacer(Modifier.height(12.dp))
-                SettingsDivider()
-                Spacer(Modifier.height(12.dp))
-                UpdateStatusSection(updateState, updateViewModel)
-            }
-        }
-
-        Spacer(Modifier.height(20.dp))
-
-        // Extensions Section
-        SettingsSectionHeader("Extensions")
         SettingsCard {
             SettingsNavItem(
-                icon = Icons.Default.Widgets,
-                title = "Installed Extensions",
-                subtitle = run {
-                    val selected = extensions.find { it.authority == selectedExtensionAuthority }
-                    when {
-                        selected != null -> selected.label
-                        selectedExtensionAuthority != null -> "Selected extension"
-                        extensions.isEmpty() -> "Tap to discover"
-                        else -> "${extensions.size} extension(s) found"
-                    }
-                },
+                icon = Icons.Default.AccountCircle,
+                title = "Account & Sync",
+                subtitle = "AniList login and sync settings",
                 tint = BlueAccent,
                 trailing = {
                     Icon(Icons.AutoMirrored.Filled.ArrowForwardIos, contentDescription = null, tint = SilverDark, modifier = Modifier.size(16.dp))
                 },
-                onClick = {
-                    viewModel.discoverExtensions()
-                    showExtensionsDialog = true
-                }
+                onClick = { onNavigate(SettingsNavRoute.AccountSync) }
             )
         }
 
         Spacer(Modifier.height(20.dp))
 
-        // About Section
-        SettingsSectionHeader("About")
         SettingsCard {
             SettingsNavItem(
-                icon = Icons.Default.Info,
-                title = "Oni Manga Reader",
-                subtitle = "Version ${BuildConfig.VERSION_NAME}",
+                icon = Icons.Default.Update,
+                title = "Reader",
+                subtitle = "Reading mode and rotation",
                 tint = BlueAccent,
                 trailing = {
                     Icon(Icons.AutoMirrored.Filled.ArrowForwardIos, contentDescription = null, tint = SilverDark, modifier = Modifier.size(16.dp))
                 },
-                onClick = { showGitHubDialog = true }
+                onClick = { onNavigate(SettingsNavRoute.Reader) }
+            )
+        }
+
+        Spacer(Modifier.height(20.dp))
+
+        SettingsCard {
+            SettingsNavItem(
+                icon = Icons.Default.Download,
+                title = "Updates & About",
+                subtitle = "App updates and version info",
+                tint = BlueAccent,
+                trailing = {
+                    Icon(Icons.AutoMirrored.Filled.ArrowForwardIos, contentDescription = null, tint = SilverDark, modifier = Modifier.size(16.dp))
+                },
+                onClick = { onNavigate(SettingsNavRoute.UpdatesAbout) }
+            )
+        }
+
+        Spacer(Modifier.height(20.dp))
+
+        SettingsCard {
+            SettingsNavItem(
+                icon = Icons.Default.Widgets,
+                title = "Extensions",
+                subtitle = "Manage manga source extensions",
+                tint = BlueAccent,
+                trailing = {
+                    Icon(Icons.AutoMirrored.Filled.ArrowForwardIos, contentDescription = null, tint = SilverDark, modifier = Modifier.size(16.dp))
+                },
+                onClick = { onNavigate(SettingsNavRoute.Extensions) }
             )
         }
 
         Spacer(Modifier.height(100.dp))
     }
+}
 
-    if (showGitHubDialog) {
+@OptIn(ExperimentalMaterial3Api::class)
+@Composable
+private fun AccountSyncScreen(viewModel: MainViewModel, onBack: () -> Unit) {
+    val anilistUsername by viewModel.anilistUsername.collectAsState()
+    val isSyncing by viewModel.isAniListSyncing.collectAsState()
+    val syncThreshold by viewModel.anilistSyncThreshold.collectAsState()
+    val showMergeDialog by viewModel.showMergeDialog.collectAsState()
+    val context = LocalContext.current
+
+    LaunchedEffect(Unit) {
+        viewModel.checkAnilistSession()
+    }
+
+    var showLogoutDialog by remember { mutableStateOf(false) }
+
+    Scaffold(
+        topBar = {
+            TopAppBar(
+                title = { Text("Account & Sync", color = SilverLight) },
+                navigationIcon = {
+                    IconButton(onClick = onBack) {
+                        Icon(Icons.AutoMirrored.Filled.ArrowBack, contentDescription = "Back", tint = SilverLight)
+                    }
+                },
+                colors = TopAppBarDefaults.topAppBarColors(containerColor = DarkBackground)
+            )
+        },
+        containerColor = DarkBackground
+    ) { padding ->
+        Column(
+            modifier = Modifier
+                .fillMaxSize()
+                .padding(padding)
+                .verticalScroll(rememberScrollState())
+        ) {
+            Spacer(Modifier.height(8.dp))
+            SettingsSectionHeader("Account")
+            SettingsCard {
+                if (anilistUsername != null) {
+                    Row(
+                        modifier = Modifier
+                            .fillMaxWidth()
+                            .padding(horizontal = 16.dp, vertical = 12.dp),
+                        verticalAlignment = Alignment.CenterVertically
+                    ) {
+                        Box(
+                            modifier = Modifier
+                                .size(40.dp)
+                                .clip(RoundedCornerShape(12.dp))
+                                .background(BlueAccent.copy(alpha = 0.15f)),
+                            contentAlignment = Alignment.Center
+                        ) {
+                            Icon(
+                                Icons.Default.AccountCircle,
+                                contentDescription = null,
+                                tint = BlueAccent,
+                                modifier = Modifier.size(24.dp)
+                            )
+                        }
+                        Spacer(Modifier.width(12.dp))
+                        Column(modifier = Modifier.weight(1f)) {
+                            Text("Logged in as $anilistUsername", color = SilverLight, style = MaterialTheme.typography.bodyLarge)
+                            Spacer(Modifier.height(4.dp))
+                            Row(verticalAlignment = Alignment.CenterVertically) {
+                                Box(
+                                    modifier = Modifier
+                                        .clip(RoundedCornerShape(4.dp))
+                                        .background(BlueAccent.copy(alpha = 0.15f))
+                                        .padding(horizontal = 6.dp, vertical = 2.dp)
+                                ) {
+                                    Text("AniList Auth", color = BlueLight, style = MaterialTheme.typography.labelSmall, fontWeight = FontWeight.Medium)
+                                }
+                            }
+                        }
+                        Text(
+                            "Logout",
+                            color = StatusDropped,
+                            style = MaterialTheme.typography.bodySmall,
+                            fontWeight = FontWeight.Medium,
+                            modifier = Modifier.clickable { showLogoutDialog = true }
+                        )
+                    }
+                    SettingsDivider()
+                    Row(
+                        modifier = Modifier
+                            .fillMaxWidth()
+                            .padding(horizontal = 16.dp, vertical = 10.dp),
+                        verticalAlignment = Alignment.CenterVertically
+                    ) {
+                        if (isSyncing) {
+                            CircularProgressIndicator(
+                                modifier = Modifier.size(20.dp),
+                                color = BlueAccent,
+                                strokeWidth = 2.dp
+                            )
+                            Spacer(Modifier.width(12.dp))
+                            Text("Syncing...", color = SilverDark, style = MaterialTheme.typography.bodySmall)
+                        } else {
+                            OutlinedButton(
+                                onClick = { viewModel.syncAnilistManga() },
+                                shape = RoundedCornerShape(12.dp)
+                            ) {
+                                Icon(Icons.Default.Sync, contentDescription = null, modifier = Modifier.size(18.dp), tint = BlueAccent)
+                                Spacer(Modifier.width(6.dp))
+                                Text("Sync Now", color = BlueAccent)
+                            }
+                        }
+                    }
+                } else {
+                    SettingsNavItem(
+                        icon = Icons.Default.AccountCircle,
+                        title = "AniList Account",
+                        subtitle = "Log in to sync your list",
+                        tint = BlueAccent,
+                        trailing = {
+                            Text("Login", color = BlueAccent, style = MaterialTheme.typography.bodySmall, fontWeight = FontWeight.Medium)
+                        },
+                        onClick = {
+                            val intent = Intent(Intent.ACTION_VIEW, Uri.parse(viewModel.getAnilistAuthUrl()))
+                            context.startActivity(intent)
+                        }
+                    )
+                }
+            }
+
+            Spacer(Modifier.height(20.dp))
+            SettingsSectionHeader("Sync")
+            SettingsCard {
+                Column(
+                    modifier = Modifier
+                        .fillMaxWidth()
+                        .padding(horizontal = 16.dp, vertical = 8.dp)
+                ) {
+                    Row(
+                        modifier = Modifier.fillMaxWidth(),
+                        horizontalArrangement = Arrangement.SpaceBetween,
+                        verticalAlignment = Alignment.CenterVertically
+                    ) {
+                        Text("Auto-sync Threshold", color = SilverLight, style = MaterialTheme.typography.bodyLarge)
+                        Text("$syncThreshold%", color = BlueAccent, style = MaterialTheme.typography.bodyMedium, fontWeight = FontWeight.Bold)
+                    }
+                    Text(
+                        "Sync progress to AniList after reading this % of a chapter",
+                        color = SilverDark,
+                        style = MaterialTheme.typography.bodySmall
+                    )
+                    Spacer(Modifier.height(8.dp))
+                    Slider(
+                        value = syncThreshold.toFloat(),
+                        onValueChange = { viewModel.updateAnilistSyncThreshold(it.roundToInt()) },
+                        valueRange = 75f..100f,
+                        modifier = Modifier.fillMaxWidth(),
+                        colors = SliderDefaults.colors(
+                            thumbColor = BlueAccent,
+                            activeTrackColor = BlueAccent,
+                            inactiveTrackColor = DarkSurfaceVariant,
+                            inactiveTickColor = BlueAccent.copy(alpha = 0.3f)
+                        ),
+                        steps = 24
+                    )
+                }
+            }
+
+            Spacer(Modifier.height(100.dp))
+        }
+    }
+
+    if (showLogoutDialog) {
         AlertDialog(
-            onDismissRequest = { showGitHubDialog = false },
+            onDismissRequest = { showLogoutDialog = false },
             containerColor = DarkCard,
             shape = RoundedCornerShape(20.dp),
-            title = { Text("Open GitHub", color = SilverLight, fontWeight = FontWeight.Bold) },
-            text = { Text("Open the GitHub page for Oni Manga Reader?", color = SilverDark) },
+            title = { Text("Logout", color = SilverLight, fontWeight = FontWeight.Bold) },
+            text = { Text("Are you sure you want to logout from AniList? Your locally synced manga will not be removed.", color = SilverDark) },
             confirmButton = {
                 Button(
                     onClick = {
-                        showGitHubDialog = false
-                        val intent = Intent(Intent.ACTION_VIEW, Uri.parse(githubUrl))
-                        context.startActivity(intent)
+                        viewModel.logoutAniList()
+                        (context as? MainActivity)?.resetAuthFlags()
+                        showLogoutDialog = false
                     },
-                    colors = ButtonDefaults.buttonColors(containerColor = BlueAccent),
+                    colors = ButtonDefaults.buttonColors(containerColor = StatusDropped),
                     shape = RoundedCornerShape(12.dp)
-                ) { Text("Open") }
+                ) { Text("Logout") }
             },
             dismissButton = {
-                TextButton(onClick = { showGitHubDialog = false }) {
+                TextButton(onClick = { showLogoutDialog = false }) {
                     Text("Cancel", color = SilverDark)
                 }
             }
@@ -463,31 +450,308 @@ fun SettingsScreen(viewModel: MainViewModel) {
             }
         )
     }
+}
 
-    if (showLogoutDialog) {
+@OptIn(ExperimentalMaterial3Api::class)
+@Composable
+private fun ReaderSettingsScreen(viewModel: MainViewModel, onBack: () -> Unit) {
+    val readerMode by viewModel.readerMode.collectAsState()
+    val lockReaderRotation by viewModel.lockReaderRotation.collectAsState()
+
+    Scaffold(
+        topBar = {
+            TopAppBar(
+                title = { Text("Reader", color = SilverLight) },
+                navigationIcon = {
+                    IconButton(onClick = onBack) {
+                        Icon(Icons.AutoMirrored.Filled.ArrowBack, contentDescription = "Back", tint = SilverLight)
+                    }
+                },
+                colors = TopAppBarDefaults.topAppBarColors(containerColor = DarkBackground)
+            )
+        },
+        containerColor = DarkBackground
+    ) { padding ->
+        Column(
+            modifier = Modifier
+                .fillMaxSize()
+                .padding(padding)
+                .verticalScroll(rememberScrollState())
+        ) {
+            Spacer(Modifier.height(8.dp))
+            SettingsSectionHeader("Reading Mode")
+            SettingsCard {
+                Column(
+                    modifier = Modifier
+                        .fillMaxWidth()
+                        .padding(horizontal = 16.dp, vertical = 12.dp)
+                ) {
+                    Text(
+                        "Choose how pages are laid out. Paged modes show one page per screen; vertical scrolls continuously.",
+                        color = SilverDark,
+                        style = MaterialTheme.typography.bodySmall
+                    )
+                    Spacer(Modifier.height(12.dp))
+
+                    ReaderMode.entries.forEach { mode ->
+                        Row(
+                            modifier = Modifier
+                                .fillMaxWidth()
+                                .clickable { viewModel.setReaderMode(mode) }
+                                .padding(vertical = 10.dp),
+                            verticalAlignment = Alignment.CenterVertically
+                        ) {
+                            Box(
+                                modifier = Modifier
+                                    .size(20.dp)
+                                    .clip(RoundedCornerShape(10.dp))
+                                    .background(
+                                        if (readerMode == mode) BlueAccent
+                                        else Color.Transparent
+                                    )
+                                    .border(
+                                        width = if (readerMode == mode) 0.dp else 1.dp,
+                                        color = if (readerMode == mode) BlueAccent else SilverDark,
+                                        shape = RoundedCornerShape(10.dp)
+                                    ),
+                                contentAlignment = Alignment.Center
+                            ) {
+                                if (readerMode == mode) {
+                                    Icon(
+                                        Icons.Default.CheckCircle,
+                                        contentDescription = null,
+                                        tint = Color.White,
+                                        modifier = Modifier.size(12.dp)
+                                    )
+                                }
+                            }
+                            Spacer(Modifier.width(12.dp))
+                            Column(modifier = Modifier.weight(1f)) {
+                                Text(mode.displayLabel, color = SilverLight, style = MaterialTheme.typography.bodyMedium, fontWeight = FontWeight.Medium)
+                                Text(
+                                    text = when (mode) {
+                                        ReaderMode.VERTICAL_SCROLL -> "Webtoon-style continuous scroll"
+                                        ReaderMode.LEFT_TO_RIGHT -> "One page per screen, swipe left for next"
+                                        ReaderMode.RIGHT_TO_LEFT -> "One page per screen, swipe right for next (manga style)"
+                                    },
+                                    color = SilverDark,
+                                    style = MaterialTheme.typography.bodySmall
+                                )
+                            }
+                        }
+                    }
+                }
+            }
+
+            Spacer(Modifier.height(20.dp))
+            SettingsSectionHeader("Rotation")
+            SettingsCard {
+                Row(
+                    modifier = Modifier
+                        .fillMaxWidth()
+                        .padding(horizontal = 16.dp, vertical = 12.dp),
+                    verticalAlignment = Alignment.CenterVertically,
+                    horizontalArrangement = Arrangement.SpaceBetween
+                ) {
+                    Column(modifier = Modifier.weight(1f)) {
+                        Text("Lock Rotation", color = SilverLight, style = MaterialTheme.typography.bodyLarge)
+                        Text(
+                            "Lock app to portrait mode. Turn off to allow landscape.",
+                            color = SilverDark,
+                            style = MaterialTheme.typography.bodySmall
+                        )
+                    }
+                    Switch(
+                        checked = lockReaderRotation,
+                        onCheckedChange = { viewModel.setLockReaderRotation(it) },
+                        colors = SwitchDefaults.colors(
+                            checkedThumbColor = SilverLight,
+                            checkedTrackColor = BlueAccent,
+                            uncheckedThumbColor = SilverDark,
+                            uncheckedTrackColor = DarkSurfaceVariant
+                        )
+                    )
+                }
+            }
+
+            Spacer(Modifier.height(100.dp))
+        }
+    }
+}
+
+@OptIn(ExperimentalMaterial3Api::class)
+@Composable
+private fun UpdatesAboutScreen(viewModel: MainViewModel, onBack: () -> Unit) {
+    val checkUpdatesOnStart by viewModel.checkUpdatesOnStart.collectAsState()
+    val pendingUpdate by viewModel.pendingUpdateRelease.collectAsState()
+    val updateViewModel: UpdateViewModel = viewModel()
+    val updateState by updateViewModel.uiState.collectAsState()
+    val context = LocalContext.current
+    val githubUrl = "https://github.com/Suntrax/Oni"
+
+    var showGitHubDialog by remember { mutableStateOf(false) }
+
+    LaunchedEffect(pendingUpdate) {
+        val release = pendingUpdate
+        if (release != null && updateState.release == null && !updateState.isChecking) {
+            updateViewModel.setRelease(release)
+        }
+    }
+
+    Scaffold(
+        topBar = {
+            TopAppBar(
+                title = { Text("Updates & About", color = SilverLight) },
+                navigationIcon = {
+                    IconButton(onClick = onBack) {
+                        Icon(Icons.AutoMirrored.Filled.ArrowBack, contentDescription = "Back", tint = SilverLight)
+                    }
+                },
+                colors = TopAppBarDefaults.topAppBarColors(containerColor = DarkBackground)
+            )
+        },
+        containerColor = DarkBackground
+    ) { padding ->
+        Column(
+            modifier = Modifier
+                .fillMaxSize()
+                .padding(padding)
+                .verticalScroll(rememberScrollState())
+        ) {
+            Spacer(Modifier.height(8.dp))
+            SettingsSectionHeader("Updates")
+            SettingsCard {
+                Column(modifier = Modifier.fillMaxWidth().padding(16.dp)) {
+                    Row(
+                        modifier = Modifier.fillMaxWidth(),
+                        verticalAlignment = Alignment.CenterVertically,
+                        horizontalArrangement = Arrangement.SpaceBetween
+                    ) {
+                        Text("Check for Updates on Start", color = SilverLight, style = MaterialTheme.typography.bodyLarge)
+                        Switch(
+                            checked = checkUpdatesOnStart,
+                            onCheckedChange = { viewModel.setCheckUpdatesOnStart(it) },
+                            colors = SwitchDefaults.colors(
+                                checkedThumbColor = SilverLight,
+                                checkedTrackColor = BlueAccent,
+                                uncheckedThumbColor = SilverDark,
+                                uncheckedTrackColor = DarkSurfaceVariant
+                            )
+                        )
+                    }
+                    Spacer(Modifier.height(12.dp))
+                    SettingsDivider()
+                    Spacer(Modifier.height(12.dp))
+                    UpdateStatusSection(updateState, updateViewModel)
+                }
+            }
+
+            Spacer(Modifier.height(20.dp))
+            SettingsSectionHeader("About")
+            SettingsCard {
+                SettingsNavItem(
+                    icon = Icons.Default.Info,
+                    title = "Oni Manga Reader",
+                    subtitle = "Version ${BuildConfig.VERSION_NAME}",
+                    tint = BlueAccent,
+                    trailing = {
+                        Icon(Icons.AutoMirrored.Filled.ArrowForwardIos, contentDescription = null, tint = SilverDark, modifier = Modifier.size(16.dp))
+                    },
+                    onClick = { showGitHubDialog = true }
+                )
+            }
+
+            Spacer(Modifier.height(100.dp))
+        }
+    }
+
+    if (showGitHubDialog) {
         AlertDialog(
-            onDismissRequest = { showLogoutDialog = false },
+            onDismissRequest = { showGitHubDialog = false },
             containerColor = DarkCard,
             shape = RoundedCornerShape(20.dp),
-            title = { Text("Logout", color = SilverLight, fontWeight = FontWeight.Bold) },
-            text = { Text("Are you sure you want to logout from AniList? Your locally synced manga will not be removed.", color = SilverDark) },
+            title = { Text("Open GitHub", color = SilverLight, fontWeight = FontWeight.Bold) },
+            text = { Text("Open the GitHub page for Oni Manga Reader?", color = SilverDark) },
             confirmButton = {
                 Button(
                     onClick = {
-                        viewModel.logoutAniList()
-                        (context as? MainActivity)?.resetAuthFlags()
-                        showLogoutDialog = false
+                        showGitHubDialog = false
+                        val intent = Intent(Intent.ACTION_VIEW, Uri.parse(githubUrl))
+                        context.startActivity(intent)
                     },
-                    colors = ButtonDefaults.buttonColors(containerColor = StatusDropped),
+                    colors = ButtonDefaults.buttonColors(containerColor = BlueAccent),
                     shape = RoundedCornerShape(12.dp)
-                ) { Text("Logout") }
+                ) { Text("Open") }
             },
             dismissButton = {
-                TextButton(onClick = { showLogoutDialog = false }) {
+                TextButton(onClick = { showGitHubDialog = false }) {
                     Text("Cancel", color = SilverDark)
                 }
             }
         )
+    }
+}
+
+@OptIn(ExperimentalMaterial3Api::class)
+@Composable
+private fun ExtensionsScreen(viewModel: MainViewModel, onBack: () -> Unit) {
+    val extensions by viewModel.installedExtensions.collectAsState()
+    val selectedExtensionAuthority by viewModel.selectedExtensionAuthority.collectAsState()
+
+    var showExtensionsDialog by remember { mutableStateOf(false) }
+
+    LaunchedEffect(Unit) {
+        viewModel.discoverExtensions()
+    }
+
+    Scaffold(
+        topBar = {
+            TopAppBar(
+                title = { Text("Extensions", color = SilverLight) },
+                navigationIcon = {
+                    IconButton(onClick = onBack) {
+                        Icon(Icons.AutoMirrored.Filled.ArrowBack, contentDescription = "Back", tint = SilverLight)
+                    }
+                },
+                colors = TopAppBarDefaults.topAppBarColors(containerColor = DarkBackground)
+            )
+        },
+        containerColor = DarkBackground
+    ) { padding ->
+        Column(
+            modifier = Modifier
+                .fillMaxSize()
+                .padding(padding)
+                .verticalScroll(rememberScrollState())
+        ) {
+            Spacer(Modifier.height(8.dp))
+            SettingsSectionHeader("Installed Extensions")
+            SettingsCard {
+                SettingsNavItem(
+                    icon = Icons.Default.Widgets,
+                    title = "Extensions",
+                    subtitle = run {
+                        val selected = extensions.find { it.authority == selectedExtensionAuthority }
+                        when {
+                            selected != null -> selected.label
+                            selectedExtensionAuthority != null -> "Selected extension"
+                            extensions.isEmpty() -> "Tap to discover"
+                            else -> "${extensions.size} extension(s) found"
+                        }
+                    },
+                    tint = BlueAccent,
+                    trailing = {
+                        Icon(Icons.AutoMirrored.Filled.ArrowForwardIos, contentDescription = null, tint = SilverDark, modifier = Modifier.size(16.dp))
+                    },
+                    onClick = {
+                        viewModel.discoverExtensions()
+                        showExtensionsDialog = true
+                    }
+                )
+            }
+
+            Spacer(Modifier.height(100.dp))
+        }
     }
 
     if (showExtensionsDialog) {

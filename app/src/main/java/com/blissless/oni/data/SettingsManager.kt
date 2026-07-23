@@ -13,6 +13,7 @@ class SettingsManager(context: Context) {
         private const val KEY_CHECK_UPDATES = "check_updates_on_start"
         private const val KEY_SELECTED_EXTENSION = "selected_extension_authority"
         private const val KEY_READER_MODE = "reader_mode"
+        private const val KEY_LOCK_READER_ROTATION = "lock_reader_rotation"
         private const val DEFAULT_SYNC_THRESHOLD = 90
     }
 
@@ -59,6 +60,14 @@ class SettingsManager(context: Context) {
 
     fun setReaderMode(mode: ReaderMode) {
         prefs.edit().putString(KEY_READER_MODE, mode.storageKey).apply()
+    }
+
+    fun getLockReaderRotation(): Boolean {
+        return prefs.getBoolean(KEY_LOCK_READER_ROTATION, true)
+    }
+
+    fun setLockReaderRotation(enabled: Boolean) {
+        prefs.edit().putBoolean(KEY_LOCK_READER_ROTATION, enabled).apply()
     }
 }
 
