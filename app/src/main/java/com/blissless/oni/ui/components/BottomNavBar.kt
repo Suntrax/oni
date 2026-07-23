@@ -29,10 +29,6 @@ import androidx.compose.ui.Modifier
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.input.pointer.pointerInput
 import androidx.compose.ui.unit.dp
-import com.blissless.oni.ui.theme.BlueAccent
-import com.blissless.oni.ui.theme.DarkCard
-import com.blissless.oni.ui.theme.GlassStroke
-import com.blissless.oni.ui.theme.SilverDark
 
 @Composable
 fun BottomNavBar(
@@ -49,10 +45,10 @@ fun BottomNavBar(
             .fillMaxWidth()
             .padding(start = 48.dp, end = 48.dp, bottom = 4.dp),
         shape = MaterialTheme.shapes.extraLarge,
-        color = DarkCard,
+        color = MaterialTheme.colorScheme.surfaceContainerLow,
         tonalElevation = 0.dp,
         shadowElevation = 12.dp,
-        border = BorderStroke(0.5.dp, GlassStroke)
+        border = BorderStroke(0.5.dp, MaterialTheme.colorScheme.outlineVariant)
     ) {
         Row(
             modifier = Modifier
@@ -89,7 +85,7 @@ fun BottomNavBar(
                     if (isSelected) {
                         Surface(
                             shape = MaterialTheme.shapes.extraLarge,
-                            color = BlueAccent,
+                            color = MaterialTheme.colorScheme.primary,
                             modifier = Modifier
                                 .fillMaxHeight()
                                 .padding(vertical = 5.dp)
@@ -118,7 +114,7 @@ fun BottomNavBar(
                         Icon(
                             icons[index],
                             contentDescription = item,
-                            tint = SilverDark,
+                            tint = MaterialTheme.colorScheme.onSurfaceVariant,
                             modifier = Modifier.size(20.dp)
                         )
                     }

@@ -51,15 +51,6 @@ import androidx.compose.ui.unit.sp
 import coil.compose.AsyncImage
 import com.blissless.oni.data.AniListSearchResult
 import com.blissless.oni.data.ExploreSection
-import com.blissless.oni.ui.theme.BlueAccent
-import com.blissless.oni.ui.theme.BlueLight
-import com.blissless.oni.ui.theme.DarkBackground
-import com.blissless.oni.ui.theme.DarkCard
-import com.blissless.oni.ui.theme.DarkSurface
-import com.blissless.oni.ui.theme.DarkSurfaceVariant
-import com.blissless.oni.ui.theme.GlassStroke
-import com.blissless.oni.ui.theme.SilverDark
-import com.blissless.oni.ui.theme.SilverLight
 import com.blissless.oni.viewmodel.MainViewModel
 import kotlinx.coroutines.delay
 
@@ -82,7 +73,7 @@ fun ExploreScreen(
             modifier = Modifier.fillMaxSize(),
             contentAlignment = Alignment.Center
         ) {
-            CircularProgressIndicator(color = BlueAccent)
+            CircularProgressIndicator(color = MaterialTheme.colorScheme.primary)
         }
     } else if (sections.isEmpty()) {
         Box(
@@ -90,9 +81,9 @@ fun ExploreScreen(
             contentAlignment = Alignment.Center
         ) {
             Column(horizontalAlignment = Alignment.CenterHorizontally) {
-                Text("No manga found", color = SilverDark, fontSize = 15.sp)
+                Text("No manga found", color = MaterialTheme.colorScheme.onSurfaceVariant, fontSize = 15.sp)
                 Spacer(modifier = Modifier.height(8.dp))
-                Text("Check your internet connection", color = SilverDark.copy(alpha = 0.5f), fontSize = 13.sp)
+                Text("Check your internet connection", color = MaterialTheme.colorScheme.onSurfaceVariant.copy(alpha = 0.5f), fontSize = 13.sp)
             }
         }
     } else {
@@ -182,8 +173,8 @@ fun FeaturedCarousel(
                         .size(6.dp)
                         .clip(CircleShape)
                         .background(
-                            if (pagerState.currentPage % actualCount == index) BlueAccent
-                            else SilverDark.copy(alpha = 0.4f)
+                            if (pagerState.currentPage % actualCount == index) MaterialTheme.colorScheme.primary
+                            else MaterialTheme.colorScheme.onSurfaceVariant.copy(alpha = 0.4f)
                         )
                 )
             }
@@ -205,7 +196,7 @@ fun FeaturedCard(
         Box(
             modifier = Modifier
                 .fillMaxSize()
-                .background(DarkSurfaceVariant)
+                .background(MaterialTheme.colorScheme.surfaceVariant)
         ) {
             if (manga.coverUrl != null) {
                 AsyncImage(
@@ -220,8 +211,8 @@ fun FeaturedCard(
                         .fillMaxSize()
                         .background(
                             Brush.linearGradient(
-                                0f to DarkSurface,
-                                1f to BlueAccent.copy(alpha = 0.3f)
+                                0f to MaterialTheme.colorScheme.surface,
+                                1f to MaterialTheme.colorScheme.primary.copy(alpha = 0.3f)
                             )
                         ),
                     contentAlignment = Alignment.Center
@@ -229,7 +220,7 @@ fun FeaturedCard(
                     Text(
                         text = manga.title.take(2).uppercase(),
                         style = MaterialTheme.typography.displayMedium,
-                        color = BlueAccent.copy(alpha = 0.5f),
+                        color = MaterialTheme.colorScheme.primary.copy(alpha = 0.5f),
                         fontWeight = FontWeight.Bold
                     )
                 }
@@ -259,7 +250,7 @@ fun FeaturedCard(
                         text = "Trending",
                         fontSize = 11.sp,
                         fontWeight = FontWeight.SemiBold,
-                        color = BlueAccent,
+                        color = MaterialTheme.colorScheme.primary,
                         letterSpacing = 1.sp
                     )
                     if (manga.meanScore != null) {
@@ -302,7 +293,7 @@ fun FeaturedCard(
                     Text(
                         text = subtitle,
                         fontSize = 13.sp,
-                        color = SilverLight.copy(alpha = 0.8f)
+                        color = MaterialTheme.colorScheme.onSurface.copy(alpha = 0.8f)
                     )
                 }
             }
@@ -333,7 +324,7 @@ fun SectionRow(
             Text(
                 text = "${section.items.size} titles",
                 fontSize = 12.sp,
-                color = SilverDark,
+                color = MaterialTheme.colorScheme.onSurfaceVariant,
                 letterSpacing = 0.2.sp
             )
         }
@@ -362,16 +353,16 @@ fun MangaSmallCard(
             .width(140.dp)
             .clickable(onClick = onClick),
         shape = RoundedCornerShape(12.dp),
-        colors = CardDefaults.cardColors(containerColor = DarkCard),
+        colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.surfaceContainerLow),
         elevation = CardDefaults.cardElevation(defaultElevation = 0.dp),
-        border = BorderStroke(0.5.dp, GlassStroke)
+        border = BorderStroke(0.5.dp, MaterialTheme.colorScheme.outlineVariant)
     ) {
         Column {
             Box(
                 modifier = Modifier
                     .fillMaxWidth()
                     .aspectRatio(3f / 4f)
-                    .background(DarkSurfaceVariant),
+                    .background(MaterialTheme.colorScheme.surfaceVariant),
                 contentAlignment = Alignment.Center
             ) {
                 if (manga.coverUrl != null) {
@@ -385,7 +376,7 @@ fun MangaSmallCard(
                     Text(
                         text = manga.title.take(2).uppercase(),
                         style = MaterialTheme.typography.titleLarge,
-                        color = BlueAccent.copy(alpha = 0.4f),
+                        color = MaterialTheme.colorScheme.primary.copy(alpha = 0.4f),
                         fontWeight = FontWeight.Bold
                     )
                 }
@@ -396,7 +387,7 @@ fun MangaSmallCard(
                         .height(60.dp)
                         .background(
                             Brush.verticalGradient(
-                                colors = listOf(Color.Transparent, DarkCard.copy(alpha = 0.85f))
+                                colors = listOf(Color.Transparent, MaterialTheme.colorScheme.surfaceContainerLow.copy(alpha = 0.85f))
                             )
                         )
                         .align(Alignment.BottomCenter)

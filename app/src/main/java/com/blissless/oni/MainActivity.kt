@@ -48,7 +48,13 @@ class MainActivity : ComponentActivity() {
         enableEdgeToEdge()
         handleAuthCallback(intent)
         setContent {
-            OniTheme {
+            val useMaterial3Color by viewModel.useMaterial3Color.collectAsState()
+            val monochromeTheme by viewModel.monochromeTheme.collectAsState()
+
+            OniTheme(
+                useMaterial3Color = useMaterial3Color,
+                monochromeTheme = monochromeTheme
+            ) {
                 Surface(
                     modifier = Modifier.fillMaxSize(),
                     color = MaterialTheme.colorScheme.background

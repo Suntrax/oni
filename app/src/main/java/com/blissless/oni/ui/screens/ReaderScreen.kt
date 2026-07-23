@@ -83,22 +83,14 @@ import com.blissless.oni.data.ChapterInfo
 import com.blissless.oni.data.ReaderMode
 import com.blissless.oni.viewmodel.MainViewModel
 import com.blissless.oni.viewmodel.UiState
-import com.blissless.oni.ui.theme.BlueAccent
-import com.blissless.oni.ui.theme.BlueLight
 import com.blissless.oni.ui.theme.ChapterCounterBg
 import com.blissless.oni.ui.theme.CurrentBlueGlow
-import com.blissless.oni.ui.theme.DarkBackground
-import com.blissless.oni.ui.theme.DarkCard
-import com.blissless.oni.ui.theme.DarkSurfaceVariant
-import com.blissless.oni.ui.theme.GlassStroke
 import com.blissless.oni.ui.theme.GlassStrokeFocused
 import com.blissless.oni.ui.theme.GradientBlue
 import com.blissless.oni.ui.theme.GradientPurple
 import com.blissless.oni.ui.theme.ProgressTrackBg
 import com.blissless.oni.ui.theme.ReadGreen
 import com.blissless.oni.ui.theme.SearchBarBg
-import com.blissless.oni.ui.theme.SilverDark
-import com.blissless.oni.ui.theme.SilverLight
 import kotlinx.coroutines.delay
 import kotlinx.coroutines.flow.distinctUntilChanged
 
@@ -269,7 +261,7 @@ fun ReaderScreen(
                                 Text(
                                     text = (chapters[selectedIndex].title ?: "Chapter ${selectedIndex + 1}") + pagePart,
                                     style = MaterialTheme.typography.bodySmall,
-                                    color = SilverDark,
+                                    color = MaterialTheme.colorScheme.onSurfaceVariant,
                                     maxLines = 1,
                                     overflow = TextOverflow.Ellipsis
                                 )
@@ -349,7 +341,7 @@ fun ReaderScreen(
                             modifier = Modifier
                                 .fillMaxWidth(scrollProgress)
                                 .height(3.dp)
-                                .background(BlueAccent)
+                                .background(MaterialTheme.colorScheme.primary)
                         )
                         Box(
                             modifier = Modifier
@@ -380,7 +372,7 @@ fun ReaderScreen(
                     contentAlignment = Alignment.Center
                 ) {
                     Column(horizontalAlignment = Alignment.CenterHorizontally) {
-                        CircularProgressIndicator(color = BlueAccent)
+                        CircularProgressIndicator(color = MaterialTheme.colorScheme.primary)
                         Spacer(modifier = Modifier.height(16.dp))
                         Text("Loading...", color = Color.White)
                     }
@@ -555,19 +547,19 @@ fun ChapterListWithGroups(
 ) {
     if (chapters.isEmpty()) {
         Box(
-            modifier = modifier.fillMaxSize().background(DarkBackground),
+            modifier = modifier.fillMaxSize().background(MaterialTheme.colorScheme.background),
             contentAlignment = Alignment.Center
         ) {
             Column(horizontalAlignment = Alignment.CenterHorizontally) {
                 Text(
                     "No chapters found",
-                    color = SilverDark,
+                    color = MaterialTheme.colorScheme.onSurfaceVariant,
                     fontSize = 15.sp
                 )
                 Spacer(modifier = Modifier.height(4.dp))
                 Text(
                     "They may not be available yet",
-                    color = SilverDark.copy(alpha = 0.5f),
+                    color = MaterialTheme.colorScheme.onSurfaceVariant.copy(alpha = 0.5f),
                     fontSize = 13.sp
                 )
             }
@@ -612,7 +604,7 @@ fun ChapterListWithGroups(
 
         LazyColumn(
             state = listState,
-            modifier = modifier.fillMaxSize().background(DarkBackground),
+            modifier = modifier.fillMaxSize().background(MaterialTheme.colorScheme.background),
             contentPadding = PaddingValues(horizontal = 16.dp, vertical = 12.dp),
             verticalArrangement = Arrangement.spacedBy(10.dp)
         ) {
@@ -645,7 +637,7 @@ fun ChapterListWithGroups(
                     ) {
                         Text(
                             "No chapters match \"$searchQuery\"",
-                            color = SilverDark,
+                            color = MaterialTheme.colorScheme.onSurfaceVariant,
                             fontSize = 14.sp
                         )
                     }
@@ -777,7 +769,7 @@ private fun ChapterListHeader(
                 Text(
                     text = "$readCount of $totalCount read",
                     style = MaterialTheme.typography.bodySmall,
-                    color = SilverDark,
+                    color = MaterialTheme.colorScheme.onSurfaceVariant,
                     letterSpacing = 0.2.sp
                 )
             }
@@ -786,7 +778,7 @@ private fun ChapterListHeader(
                 Text(
                     text = "${(progress * 100).toInt()}%",
                     style = MaterialTheme.typography.labelLarge,
-                    color = BlueLight,
+                    color = MaterialTheme.colorScheme.primaryContainer,
                     fontWeight = FontWeight.SemiBold
                 )
             }
@@ -823,7 +815,7 @@ private fun ChapterListHeader(
                     .fillMaxWidth()
                     .height(52.dp),
                 shape = RoundedCornerShape(14.dp),
-                colors = ButtonDefaults.buttonColors(containerColor = BlueAccent),
+                colors = ButtonDefaults.buttonColors(containerColor = MaterialTheme.colorScheme.primary),
                 elevation = ButtonDefaults.buttonElevation(defaultElevation = 8.dp)
             ) {
                 Icon(
@@ -861,7 +853,7 @@ private fun ChapterSearchBar(
             .background(SearchBarBg)
             .then(
                 if (query.isNotEmpty()) Modifier.border(1.dp, GlassStrokeFocused, RoundedCornerShape(12.dp))
-                else Modifier.border(1.dp, GlassStroke, RoundedCornerShape(12.dp))
+                else Modifier.border(1.dp, MaterialTheme.colorScheme.outlineVariant, RoundedCornerShape(12.dp))
             )
     ) {
         Row(
@@ -873,7 +865,7 @@ private fun ChapterSearchBar(
             Icon(
                 Icons.Default.Search,
                 contentDescription = "Search",
-                tint = SilverDark,
+                tint = MaterialTheme.colorScheme.onSurfaceVariant,
                 modifier = Modifier.size(18.dp)
             )
             Spacer(modifier = Modifier.width(10.dp))
@@ -892,7 +884,7 @@ private fun ChapterSearchBar(
                         if (query.isEmpty()) {
                             Text(
                                 "Search chapters...",
-                                color = SilverDark,
+                                color = MaterialTheme.colorScheme.onSurfaceVariant,
                                 fontSize = 14.sp
                             )
                         }
@@ -909,7 +901,7 @@ private fun ChapterSearchBar(
                     Icon(
                         Icons.Default.Close,
                         contentDescription = "Clear",
-                        tint = SilverDark,
+                        tint = MaterialTheme.colorScheme.onSurfaceVariant,
                         modifier = Modifier.size(16.dp)
                     )
                 }
@@ -949,9 +941,9 @@ fun ChapterGroup(
                 indication = null
             ) { expanded = !expanded },
         shape = RoundedCornerShape(16.dp),
-        colors = CardDefaults.cardColors(containerColor = DarkCard),
+        colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.surfaceContainerLow),
         elevation = CardDefaults.cardElevation(defaultElevation = 0.dp),
-        border = BorderStroke(0.5.dp, GlassStroke)
+        border = BorderStroke(0.5.dp, MaterialTheme.colorScheme.outlineVariant)
     ) {
         Column {
             Row(
@@ -974,7 +966,7 @@ fun ChapterGroup(
                         Text(
                             text = "${groupChapters.size} chapters",
                             style = MaterialTheme.typography.bodySmall,
-                            color = SilverDark
+                            color = MaterialTheme.colorScheme.onSurfaceVariant
                         )
                         if (readInGroup > 0) {
                             Spacer(modifier = Modifier.width(6.dp))
@@ -995,7 +987,7 @@ fun ChapterGroup(
                     Text(
                         text = "${groupChapters.size}",
                         style = MaterialTheme.typography.labelSmall,
-                        color = SilverLight,
+                        color = MaterialTheme.colorScheme.onSurface,
                         fontWeight = FontWeight.SemiBold
                     )
                 }
@@ -1005,7 +997,7 @@ fun ChapterGroup(
                 Icon(
                     imageVector = Icons.Default.KeyboardArrowDown,
                     contentDescription = if (expanded) "Collapse" else "Expand",
-                    tint = SilverDark,
+                    tint = MaterialTheme.colorScheme.onSurfaceVariant,
                     modifier = Modifier.graphicsLayer { rotationZ = rotationAngle }
                 )
             }
@@ -1016,7 +1008,7 @@ fun ChapterGroup(
                 exit = fadeOut(animationSpec = tween(100))
             ) {
                 HorizontalDivider(
-                    color = GlassStroke,
+                    color = MaterialTheme.colorScheme.outlineVariant,
                     thickness = 0.5.dp,
                     modifier = Modifier.padding(horizontal = 16.dp)
                 )
@@ -1057,10 +1049,10 @@ fun ChapterRow(
     val isUnavailable = chapter.url.startsWith("mangadex:unavailable:")
     val accentColor = when {
         isUnavailable -> Color(0xFF3A3A3A)
-        isSelected && !showAsNext -> BlueAccent
-        showAsNext -> BlueLight
+        isSelected && !showAsNext -> MaterialTheme.colorScheme.primary
+        showAsNext -> MaterialTheme.colorScheme.primaryContainer
         isRead -> ReadGreen
-        isSelected -> BlueAccent
+        isSelected -> MaterialTheme.colorScheme.primary
         else -> Color.Transparent
     }
 
@@ -1096,11 +1088,11 @@ fun ChapterRow(
                 text = "Ch. $chNum",
                 style = MaterialTheme.typography.bodyMedium,
                 color = when {
-                    isUnavailable -> SilverDark.copy(alpha = 0.4f)
-                    showAsNext -> BlueLight
-                    isSelected -> BlueAccent
+                    isUnavailable -> MaterialTheme.colorScheme.onSurfaceVariant.copy(alpha = 0.4f)
+                    showAsNext -> MaterialTheme.colorScheme.primaryContainer
+                    isSelected -> MaterialTheme.colorScheme.primary
                     isRead -> ReadGreen.copy(alpha = 0.8f)
-                    else -> SilverLight
+                    else -> MaterialTheme.colorScheme.onSurface
                 },
                 fontWeight = if (isSelected || isNextToRead) FontWeight.Bold else FontWeight.Medium,
                 modifier = Modifier.width(64.dp)
@@ -1112,12 +1104,12 @@ fun ChapterRow(
                 text = chapter.title ?: "",
                 style = MaterialTheme.typography.bodyMedium,
                 color = when {
-                    isUnavailable -> SilverDark.copy(alpha = 0.5f)
+                    isUnavailable -> MaterialTheme.colorScheme.onSurfaceVariant.copy(alpha = 0.5f)
                     showAsNext -> Color.White
                     isSelected -> Color.White
                     isNextToRead -> Color.White
-                    isRead -> SilverDark
-                    else -> SilverLight
+                    isRead -> MaterialTheme.colorScheme.onSurfaceVariant
+                    else -> MaterialTheme.colorScheme.onSurface
                 },
                 maxLines = 1,
                 overflow = TextOverflow.Ellipsis,
@@ -1131,14 +1123,14 @@ fun ChapterRow(
                     Box(
                         modifier = Modifier
                             .size(8.dp)
-                            .background(BlueAccent, CircleShape)
+                            .background(MaterialTheme.colorScheme.primary, CircleShape)
                     )
                 }
                 showAsNext -> {
                     Box(
                         modifier = Modifier
                             .size(8.dp)
-                            .background(BlueLight, CircleShape)
+                            .background(MaterialTheme.colorScheme.primaryContainer, CircleShape)
                     )
                 }
                 isRead -> {
@@ -1159,8 +1151,8 @@ fun ChapterRow(
                     .background(
                         Brush.horizontalGradient(
                             colors = listOf(
-                                BlueAccent.copy(alpha = 0.6f),
-                                BlueAccent.copy(alpha = 0f)
+                                MaterialTheme.colorScheme.primary.copy(alpha = 0.6f),
+                                MaterialTheme.colorScheme.primary.copy(alpha = 0f)
                             )
                         )
                     )
@@ -1230,7 +1222,7 @@ private fun SegmentedToggleItem(
         modifier = Modifier
             .size(32.dp)
             .clip(RoundedCornerShape(8.dp))
-            .background(if (selected) BlueAccent else Color.Transparent)
+            .background(if (selected) MaterialTheme.colorScheme.primary else Color.Transparent)
             .clickable(onClick = onClick),
         contentAlignment = Alignment.Center
     ) {

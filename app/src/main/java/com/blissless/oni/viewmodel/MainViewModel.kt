@@ -228,6 +228,24 @@ class MainViewModel(private val context: Context) : ViewModel() {
         _lockReaderRotation.value = enabled
     }
 
+    // Material 3 dynamic color
+    private val _useMaterial3Color = MutableStateFlow(settingsManager.getMaterial3Color())
+    val useMaterial3Color: StateFlow<Boolean> = _useMaterial3Color.asStateFlow()
+
+    fun setMaterial3Color(enabled: Boolean) {
+        settingsManager.setMaterial3Color(enabled)
+        _useMaterial3Color.value = enabled
+    }
+
+    // Monochrome theme
+    private val _monochromeTheme = MutableStateFlow(settingsManager.getMonochromeTheme())
+    val monochromeTheme: StateFlow<Boolean> = _monochromeTheme.asStateFlow()
+
+    fun setMonochromeTheme(enabled: Boolean) {
+        settingsManager.setMonochromeTheme(enabled)
+        _monochromeTheme.value = enabled
+    }
+
     fun selectExtension(authority: String?) {
         settingsManager.setSelectedExtensionAuthority(authority)
         _selectedExtensionAuthority.value = authority

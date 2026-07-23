@@ -22,8 +22,8 @@ android {
         applicationId = "com.blissless.oni"
         minSdk = 26
         targetSdk = 37
-        versionCode = 10
-        versionName = "1.0.9"
+        versionCode = 12
+        versionName = "1.1.1"
 
         val anilistApiKey = localProperties.getProperty("CLIENT_ID_ANILIST")
 

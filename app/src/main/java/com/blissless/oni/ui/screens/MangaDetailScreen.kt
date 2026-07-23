@@ -108,21 +108,11 @@ import com.blissless.oni.data.AniListSearchResult
 import com.blissless.oni.data.AniListStaffEntry
 import com.blissless.oni.data.AniListTag
 import com.blissless.oni.data.ReadingStatus
-import com.blissless.oni.ui.theme.BlueAccent
-import com.blissless.oni.ui.theme.BlueLight
-import com.blissless.oni.ui.theme.DarkBackground
-import com.blissless.oni.ui.theme.DarkCard
-import com.blissless.oni.ui.theme.DarkSurface
-import com.blissless.oni.ui.theme.DarkSurfaceVariant
-import com.blissless.oni.ui.theme.GlassStroke
 import com.blissless.oni.ui.theme.GradientBlue
 import com.blissless.oni.ui.theme.GradientPurple
 import com.blissless.oni.ui.theme.GradientTeal
 import com.blissless.oni.ui.theme.ReadGreen
-import com.blissless.oni.ui.theme.SilverDark
-import com.blissless.oni.ui.theme.SilverLight
 import com.blissless.oni.ui.theme.StatusCompleted
-import com.blissless.oni.ui.theme.StatusDropped
 import com.blissless.oni.ui.theme.StatusPaused
 import com.blissless.oni.ui.theme.StatusPlanning
 import com.blissless.oni.viewmodel.MainViewModel
@@ -203,7 +193,7 @@ fun MangaDetailScreen(
     Box(
         modifier = Modifier
             .fillMaxSize()
-            .background(DarkBackground)
+            .background(MaterialTheme.colorScheme.background)
     ) {
         when {
             isLoading && detail == null -> {
@@ -214,7 +204,7 @@ fun MangaDetailScreen(
                         .navigationBarsPadding(),
                     contentAlignment = Alignment.Center
                 ) {
-                    CircularProgressIndicator(color = BlueAccent)
+                    CircularProgressIndicator(color = MaterialTheme.colorScheme.primary)
                 }
             }
 
@@ -376,7 +366,7 @@ fun MangaDetailScreen(
                 contentAlignment = Alignment.Center
             ) {
                 Column(horizontalAlignment = Alignment.CenterHorizontally) {
-                    CircularProgressIndicator(color = BlueAccent)
+                    CircularProgressIndicator(color = MaterialTheme.colorScheme.primary)
                     Spacer(modifier = Modifier.height(16.dp))
                     Text("Loading...", color = Color.White)
                 }
@@ -437,8 +427,8 @@ private fun HeaderSection(detail: AniListMangaDetail, fallbackCoverUrl: String?)
                     .offset(y = bannerOffsetY)
                     .background(
                         Brush.linearGradient(
-                            0f to DarkSurface,
-                            1f to BlueAccent.copy(alpha = 0.15f)
+                            0f to MaterialTheme.colorScheme.surface,
+                            1f to MaterialTheme.colorScheme.primary.copy(alpha = 0.15f)
                         )
                     )
             )
@@ -451,9 +441,9 @@ private fun HeaderSection(detail: AniListMangaDetail, fallbackCoverUrl: String?)
                 .background(
                     Brush.verticalGradient(
                         colors = listOf(
-                            DarkBackground.copy(alpha = 0.4f),
-                            DarkBackground.copy(alpha = 0.7f),
-                            DarkBackground
+                            MaterialTheme.colorScheme.background.copy(alpha = 0.4f),
+                            MaterialTheme.colorScheme.background.copy(alpha = 0.7f),
+                            MaterialTheme.colorScheme.background
                         )
                     )
                 )
@@ -482,10 +472,10 @@ private fun HeaderSection(detail: AniListMangaDetail, fallbackCoverUrl: String?)
                         .width(120.dp)
                         .aspectRatio(0.7f)
                         .clip(RoundedCornerShape(14.dp))
-                        .background(DarkSurfaceVariant),
+                        .background(MaterialTheme.colorScheme.surfaceVariant),
                     contentAlignment = Alignment.Center
                 ) {
-                    Text(detail.titleRomaji.take(2), color = SilverDark, fontWeight = FontWeight.Bold)
+                    Text(detail.titleRomaji.take(2), color = MaterialTheme.colorScheme.onSurfaceVariant, fontWeight = FontWeight.Bold)
                 }
             }
 
@@ -504,7 +494,7 @@ private fun HeaderSection(detail: AniListMangaDetail, fallbackCoverUrl: String?)
                     Spacer(modifier = Modifier.height(4.dp))
                     Text(
                         text = detail.titleEnglish,
-                        color = SilverDark,
+                        color = MaterialTheme.colorScheme.onSurfaceVariant,
                         fontSize = 13.sp,
                         maxLines = 1,
                         overflow = TextOverflow.Ellipsis
@@ -517,11 +507,11 @@ private fun HeaderSection(detail: AniListMangaDetail, fallbackCoverUrl: String?)
                         Text(
                             text = formatLabel,
                             fontSize = 11.sp,
-                            color = BlueAccent,
+                            color = MaterialTheme.colorScheme.primary,
                             fontWeight = FontWeight.SemiBold,
                             modifier = Modifier
                                 .clip(RoundedCornerShape(4.dp))
-                                .background(BlueAccent.copy(alpha = 0.15f))
+                                .background(MaterialTheme.colorScheme.primary.copy(alpha = 0.15f))
                                 .padding(horizontal = 8.dp, vertical = 2.dp)
                         )
                         Spacer(modifier = Modifier.width(8.dp))
@@ -529,7 +519,7 @@ private fun HeaderSection(detail: AniListMangaDetail, fallbackCoverUrl: String?)
                     Text(
                         text = formatStatus(detail.status),
                         fontSize = 11.sp,
-                        color = if (detail.status == "RELEASING") Color(0xFF10B981) else SilverDark,
+                        color = if (detail.status == "RELEASING") Color(0xFF10B981) else MaterialTheme.colorScheme.onSurfaceVariant,
                         fontWeight = FontWeight.Medium
                     )
                 }
@@ -537,7 +527,7 @@ private fun HeaderSection(detail: AniListMangaDetail, fallbackCoverUrl: String?)
                     Spacer(modifier = Modifier.height(4.dp))
                     Text(
                         text = "Source: ${formatSource(detail.source)}",
-                        color = SilverDark.copy(alpha = 0.7f),
+                        color = MaterialTheme.colorScheme.onSurfaceVariant.copy(alpha = 0.7f),
                         fontSize = 11.sp
                     )
                 }
@@ -547,13 +537,13 @@ private fun HeaderSection(detail: AniListMangaDetail, fallbackCoverUrl: String?)
                         verticalAlignment = Alignment.CenterVertically,
                         modifier = Modifier
                             .clip(RoundedCornerShape(6.dp))
-                            .background(SilverDark.copy(alpha = 0.12f))
+                            .background(MaterialTheme.colorScheme.onSurfaceVariant.copy(alpha = 0.12f))
                             .padding(horizontal = 8.dp, vertical = 3.dp)
                     ) {
                         Icon(
                             Icons.Default.CalendarMonth,
                             contentDescription = null,
-                            tint = SilverDark,
+                            tint = MaterialTheme.colorScheme.onSurfaceVariant,
                             modifier = Modifier.size(12.dp)
                         )
                         Spacer(Modifier.width(5.dp))
@@ -565,7 +555,7 @@ private fun HeaderSection(detail: AniListMangaDetail, fallbackCoverUrl: String?)
                                     append(" - $endDate")
                                 }
                             },
-                            color = SilverDark,
+                            color = MaterialTheme.colorScheme.onSurfaceVariant,
                             fontSize = 11.sp,
                             fontWeight = FontWeight.Medium
                         )
@@ -573,7 +563,7 @@ private fun HeaderSection(detail: AniListMangaDetail, fallbackCoverUrl: String?)
                             Spacer(Modifier.width(8.dp))
                             Text(
                                 text = detail.countryOfOrigin!!,
-                                color = SilverDark.copy(alpha = 0.5f),
+                                color = MaterialTheme.colorScheme.onSurfaceVariant.copy(alpha = 0.5f),
                                 fontSize = 10.sp
                             )
                         }
@@ -596,9 +586,9 @@ private fun StatsCard(
             .fillMaxWidth()
             .padding(horizontal = 16.dp),
         shape = RoundedCornerShape(16.dp),
-        colors = CardDefaults.cardColors(containerColor = DarkCard),
+        colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.surfaceContainerLow),
         elevation = CardDefaults.cardElevation(defaultElevation = 0.dp),
-        border = BorderStroke(0.5.dp, GlassStroke)
+        border = BorderStroke(0.5.dp, MaterialTheme.colorScheme.outlineVariant)
     ) {
         Row(
             modifier = Modifier
@@ -627,7 +617,7 @@ private fun StatsCard(
                     icon = null,
                     value = "$displayChapters",
                     label = "Chapters",
-                    color = SilverLight
+                    color = MaterialTheme.colorScheme.onSurface
                 )
             }
             // Volumes: prefer AniList, fall back to MangaDex aggregate volume count.
@@ -640,7 +630,7 @@ private fun StatsCard(
                     icon = null,
                     value = "$displayVolumes",
                     label = "Volumes",
-                    color = SilverLight
+                    color = MaterialTheme.colorScheme.onSurface
                 )
             }
             if (detail.popularity != null) {
@@ -649,7 +639,7 @@ private fun StatsCard(
                     icon = Icons.Default.TrendingUp,
                     value = formatNumber(detail.popularity),
                     label = "Popular",
-                    color = BlueLight
+                    color = MaterialTheme.colorScheme.primaryContainer
                 )
             }
             if (detail.favourites != null && detail.favourites!! > 0) {
@@ -676,13 +666,13 @@ private fun StatItem(icon: ImageVector?, value: String, label: String, color: Co
             Text(value, color = color, fontWeight = FontWeight.Bold, fontSize = if (value.length > 4) 13.sp else 15.sp)
         }
         Spacer(Modifier.height(2.dp))
-        Text(label, color = SilverDark, fontSize = 10.sp, letterSpacing = 0.5.sp, fontWeight = FontWeight.Medium)
+        Text(label, color = MaterialTheme.colorScheme.onSurfaceVariant, fontSize = 10.sp, letterSpacing = 0.5.sp, fontWeight = FontWeight.Medium)
     }
 }
 
 @Composable
 private fun DividerDot() {
-    Box(modifier = Modifier.width(1.dp).height(32.dp).background(GlassStroke))
+    Box(modifier = Modifier.width(1.dp).height(32.dp).background(MaterialTheme.colorScheme.outlineVariant))
 }
 
 @Composable
@@ -706,9 +696,9 @@ private fun ActionButtonsCard(
             .fillMaxWidth()
             .padding(horizontal = 16.dp),
         shape = RoundedCornerShape(16.dp),
-        colors = CardDefaults.cardColors(containerColor = DarkCard),
+        colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.surfaceContainerLow),
         elevation = CardDefaults.cardElevation(defaultElevation = 0.dp),
-        border = BorderStroke(0.5.dp, GlassStroke)
+        border = BorderStroke(0.5.dp, MaterialTheme.colorScheme.outlineVariant)
     ) {
         Column(modifier = Modifier.padding(16.dp)) {
             val totalAvailable = chapters.size.coerceAtLeast(detail.chapters ?: 0)
@@ -717,7 +707,7 @@ private fun ActionButtonsCard(
                 Button(
                     onClick = onStartReading,
                     modifier = Modifier.fillMaxWidth().height(52.dp),
-                    colors = ButtonDefaults.buttonColors(containerColor = BlueAccent),
+                    colors = ButtonDefaults.buttonColors(containerColor = MaterialTheme.colorScheme.primary),
                     shape = RoundedCornerShape(14.dp),
                     elevation = ButtonDefaults.buttonElevation(defaultElevation = 6.dp)
                 ) {
@@ -753,14 +743,14 @@ private fun ActionButtonsCard(
                     .fillMaxWidth()
                     .height(44.dp)
                     .clip(RoundedCornerShape(12.dp))
-                    .background(DarkSurfaceVariant.copy(alpha = 0.5f))
+                    .background(MaterialTheme.colorScheme.surfaceVariant.copy(alpha = 0.5f))
                     .clickable(onClick = onOpenChapterSelect),
                 horizontalArrangement = Arrangement.Center,
                 verticalAlignment = Alignment.CenterVertically
             ) {
-                Icon(Icons.AutoMirrored.Filled.List, contentDescription = null, modifier = Modifier.size(18.dp), tint = BlueAccent)
+                Icon(Icons.AutoMirrored.Filled.List, contentDescription = null, modifier = Modifier.size(18.dp), tint = MaterialTheme.colorScheme.primary)
                 Spacer(Modifier.width(6.dp))
-                Text("All Chapters", fontWeight = FontWeight.Medium, fontSize = 13.sp, color = SilverLight, letterSpacing = 0.3.sp)
+                Text("All Chapters", fontWeight = FontWeight.Medium, fontSize = 13.sp, color = MaterialTheme.colorScheme.onSurface, letterSpacing = 0.3.sp)
             }
 
         }
@@ -781,7 +771,7 @@ private fun StatusButton(
                 .fillMaxWidth()
                 .height(44.dp)
                 .clip(RoundedCornerShape(12.dp))
-                .background(DarkSurfaceVariant.copy(alpha = 0.5f))
+                .background(MaterialTheme.colorScheme.surfaceVariant.copy(alpha = 0.5f))
                 .clickable { onStatusMenuToggle(true) },
             horizontalArrangement = Arrangement.Center,
             verticalAlignment = Alignment.CenterVertically
@@ -795,10 +785,10 @@ private fun StatusButton(
                 contentDescription = null,
                 modifier = Modifier.size(18.dp),
                 tint = when (currentStatus) {
-                    ReadingStatus.READING -> BlueAccent
+                    ReadingStatus.READING -> MaterialTheme.colorScheme.primary
                     ReadingStatus.PLANNING -> StatusPlanning
                     ReadingStatus.COMPLETED -> StatusCompleted
-                    else -> SilverDark
+                    else -> MaterialTheme.colorScheme.onSurfaceVariant
                 }
             )
             Spacer(Modifier.width(6.dp))
@@ -814,10 +804,10 @@ private fun StatusButton(
                 fontWeight = FontWeight.Medium,
                 fontSize = 13.sp,
                 color = when (currentStatus) {
-                    ReadingStatus.READING -> BlueAccent
+                    ReadingStatus.READING -> MaterialTheme.colorScheme.primary
                     ReadingStatus.PLANNING -> StatusPlanning
                     ReadingStatus.COMPLETED -> StatusCompleted
-                    else -> SilverLight
+                    else -> MaterialTheme.colorScheme.onSurface
                 }
             )
         }
@@ -841,18 +831,18 @@ private fun StatusButton(
                     ReadingStatus.DROPPED -> "Dropped"
                 }
                 val statusColor = when (status) {
-                    ReadingStatus.READING -> BlueAccent
+                    ReadingStatus.READING -> MaterialTheme.colorScheme.primary
                     ReadingStatus.PLANNING -> StatusPlanning
                     ReadingStatus.COMPLETED -> StatusCompleted
                     ReadingStatus.ON_HOLD -> StatusPaused
-                    ReadingStatus.DROPPED -> StatusDropped
+                    ReadingStatus.DROPPED -> MaterialTheme.colorScheme.error
                 }
                 DropdownMenuItem(
                     text = {
                         Row(verticalAlignment = Alignment.CenterVertically) {
                             Box(modifier = Modifier.size(8.dp).clip(CircleShape).background(statusColor))
                             Spacer(Modifier.width(10.dp))
-                            Text(label, fontSize = 14.sp, color = SilverLight)
+                            Text(label, fontSize = 14.sp, color = MaterialTheme.colorScheme.onSurface)
                         }
                     },
                     onClick = {
@@ -863,13 +853,13 @@ private fun StatusButton(
                     }
                 )
             }
-            HorizontalDivider(color = GlassStroke)
+            HorizontalDivider(color = MaterialTheme.colorScheme.outlineVariant)
             DropdownMenuItem(
                 text = {
                     Row(verticalAlignment = Alignment.CenterVertically) {
-                        Icon(Icons.Default.Close, contentDescription = null, tint = StatusDropped, modifier = Modifier.size(16.dp))
+                        Icon(Icons.Default.Close, contentDescription = null, tint = MaterialTheme.colorScheme.error, modifier = Modifier.size(16.dp))
                         Spacer(Modifier.width(10.dp))
-                        Text("Remove from AniList", fontSize = 14.sp, color = SilverLight)
+                        Text("Remove from AniList", fontSize = 14.sp, color = MaterialTheme.colorScheme.onSurface)
                     }
                 },
                 onClick = {
@@ -888,14 +878,14 @@ private fun ProgressButton(onClick: () -> Unit) {
             .fillMaxWidth()
             .height(44.dp)
             .clip(RoundedCornerShape(12.dp))
-            .background(DarkSurfaceVariant.copy(alpha = 0.5f))
+            .background(MaterialTheme.colorScheme.surfaceVariant.copy(alpha = 0.5f))
             .clickable(onClick = onClick),
         horizontalArrangement = Arrangement.Center,
         verticalAlignment = Alignment.CenterVertically
     ) {
-        Icon(Icons.Default.Edit, contentDescription = null, modifier = Modifier.size(18.dp), tint = BlueLight)
+        Icon(Icons.Default.Edit, contentDescription = null, modifier = Modifier.size(18.dp), tint = MaterialTheme.colorScheme.primaryContainer)
         Spacer(Modifier.width(6.dp))
-        Text("Set Progress", fontWeight = FontWeight.Medium, fontSize = 13.sp, color = SilverLight)
+        Text("Set Progress", fontWeight = FontWeight.Medium, fontSize = 13.sp, color = MaterialTheme.colorScheme.onSurface)
     }
 }
 
@@ -912,11 +902,11 @@ private fun GenresSection(genres: List<String>) {
                 Box(
                     modifier = Modifier
                         .clip(RoundedCornerShape(20.dp))
-                        .background(DarkSurfaceVariant.copy(alpha = 0.5f))
-                        .border(0.5.dp, GlassStroke, RoundedCornerShape(20.dp))
+                        .background(MaterialTheme.colorScheme.surfaceVariant.copy(alpha = 0.5f))
+                        .border(0.5.dp, MaterialTheme.colorScheme.outlineVariant, RoundedCornerShape(20.dp))
                         .padding(horizontal = 14.dp, vertical = 6.dp)
                 ) {
-                    Text(genre, fontSize = 12.sp, fontWeight = FontWeight.Medium, color = SilverLight.copy(alpha = 0.8f))
+                    Text(genre, fontSize = 12.sp, fontWeight = FontWeight.Medium, color = MaterialTheme.colorScheme.onSurface.copy(alpha = 0.8f))
                 }
             }
         }
@@ -934,9 +924,9 @@ private fun TagsSection(tags: List<AniListTag>) {
         ) {
             tags.sortedByDescending { it.rank }.take(20).forEach { tag ->
                 val tagColor = when {
-                    tag.rank >= 80 -> BlueAccent
-                    tag.rank >= 50 -> BlueLight
-                    else -> SilverDark
+                    tag.rank >= 80 -> MaterialTheme.colorScheme.primary
+                    tag.rank >= 50 -> MaterialTheme.colorScheme.primaryContainer
+                    else -> MaterialTheme.colorScheme.onSurfaceVariant
                 }
                 Box(
                     modifier = Modifier
@@ -969,8 +959,8 @@ private fun CharactersSection(characters: List<AniListCharacterEntry>) {
                 Card(
                     modifier = Modifier.width(100.dp),
                     shape = RoundedCornerShape(12.dp),
-                    colors = CardDefaults.cardColors(containerColor = DarkCard),
-                    border = BorderStroke(0.5.dp, GlassStroke),
+                    colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.surfaceContainerLow),
+                    border = BorderStroke(0.5.dp, MaterialTheme.colorScheme.outlineVariant),
                     elevation = CardDefaults.cardElevation(defaultElevation = 0.dp)
                 ) {
                     Column(horizontalAlignment = Alignment.CenterHorizontally) {
@@ -985,16 +975,16 @@ private fun CharactersSection(characters: List<AniListCharacterEntry>) {
                             )
                         } else {
                             Box(
-                                modifier = Modifier.fillMaxWidth().height(120.dp).background(DarkSurfaceVariant),
+                                modifier = Modifier.fillMaxWidth().height(120.dp).background(MaterialTheme.colorScheme.surfaceVariant),
                                 contentAlignment = Alignment.Center
                             ) {
-                                Text(char.name.take(2), color = SilverDark)
+                                Text(char.name.take(2), color = MaterialTheme.colorScheme.onSurfaceVariant)
                             }
                         }
                         Text(
                             text = char.name,
                             fontSize = 11.sp,
-                            color = SilverLight,
+                            color = MaterialTheme.colorScheme.onSurface,
                             fontWeight = FontWeight.Medium,
                             maxLines = 2,
                             overflow = TextOverflow.Ellipsis,
@@ -1004,7 +994,7 @@ private fun CharactersSection(characters: List<AniListCharacterEntry>) {
                         Text(
                             text = char.role,
                             fontSize = 9.sp,
-                            color = SilverDark,
+                            color = MaterialTheme.colorScheme.onSurfaceVariant,
                             modifier = Modifier.padding(bottom = 4.dp)
                         )
                     }
@@ -1024,12 +1014,12 @@ private fun RelationsSection(relations: List<AniListRelationEntry>) {
                 Card(
                     modifier = Modifier.width(130.dp),
                     shape = RoundedCornerShape(12.dp),
-                    colors = CardDefaults.cardColors(containerColor = DarkCard),
-                    border = BorderStroke(0.5.dp, GlassStroke),
+                    colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.surfaceContainerLow),
+                    border = BorderStroke(0.5.dp, MaterialTheme.colorScheme.outlineVariant),
                     elevation = CardDefaults.cardElevation(defaultElevation = 0.dp)
                 ) {
                     Column {
-                        Box(modifier = Modifier.fillMaxWidth().aspectRatio(0.7f).background(DarkSurfaceVariant)) {
+                        Box(modifier = Modifier.fillMaxWidth().aspectRatio(0.7f).background(MaterialTheme.colorScheme.surfaceVariant)) {
                             if (rel.coverUrl != null) {
                                 AsyncImage(
                                     model = rel.coverUrl,
@@ -1043,7 +1033,7 @@ private fun RelationsSection(relations: List<AniListRelationEntry>) {
                             Text(
                                 text = formatRelationType(rel.relationType),
                                 fontSize = 9.sp,
-                                color = BlueAccent,
+                                color = MaterialTheme.colorScheme.primary,
                                 fontWeight = FontWeight.SemiBold,
                                 letterSpacing = 0.5.sp,
                                 maxLines = 1
@@ -1052,7 +1042,7 @@ private fun RelationsSection(relations: List<AniListRelationEntry>) {
                             Text(
                                 text = rel.title,
                                 fontSize = 11.sp,
-                                color = SilverLight,
+                                color = MaterialTheme.colorScheme.onSurface,
                                 fontWeight = FontWeight.Medium,
                                 maxLines = 1,
                                 overflow = TextOverflow.Ellipsis
@@ -1077,8 +1067,8 @@ private fun RankingsSection(rankings: List<AniListRankingEntry>) {
             rankings.take(6).forEach { ranking ->
                 val color = when {
                     ranking.rank <= 10 -> Color(0xFFfbbf24)
-                    ranking.rank <= 100 -> BlueLight
-                    else -> SilverDark
+                    ranking.rank <= 100 -> MaterialTheme.colorScheme.primaryContainer
+                    else -> MaterialTheme.colorScheme.onSurfaceVariant
                 }
                 Box(
                     modifier = Modifier
@@ -1117,12 +1107,12 @@ private fun RecommendationsSection(recommendations: List<AniListSearchResult>) {
                 Card(
                     modifier = Modifier.width(120.dp),
                     shape = RoundedCornerShape(12.dp),
-                    colors = CardDefaults.cardColors(containerColor = DarkCard),
-                    border = BorderStroke(0.5.dp, GlassStroke),
+                    colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.surfaceContainerLow),
+                    border = BorderStroke(0.5.dp, MaterialTheme.colorScheme.outlineVariant),
                     elevation = CardDefaults.cardElevation(defaultElevation = 0.dp)
                 ) {
                     Column {
-                        Box(modifier = Modifier.fillMaxWidth().aspectRatio(0.7f).background(DarkSurfaceVariant)) {
+                        Box(modifier = Modifier.fillMaxWidth().aspectRatio(0.7f).background(MaterialTheme.colorScheme.surfaceVariant)) {
                             if (rec.coverUrl != null) {
                                 AsyncImage(
                                     model = rec.coverUrl,
@@ -1136,7 +1126,7 @@ private fun RecommendationsSection(recommendations: List<AniListSearchResult>) {
                             Text(
                                 text = rec.title,
                                 fontSize = 11.sp,
-                                color = SilverLight,
+                                color = MaterialTheme.colorScheme.onSurface,
                                 fontWeight = FontWeight.Medium,
                                 maxLines = 2,
                                 overflow = TextOverflow.Ellipsis
@@ -1174,7 +1164,7 @@ private fun StaffSection(staff: List<AniListStaffEntry>) {
                     verticalAlignment = Alignment.CenterVertically,
                     modifier = Modifier
                         .clip(RoundedCornerShape(10.dp))
-                        .background(DarkSurfaceVariant.copy(alpha = 0.4f))
+                        .background(MaterialTheme.colorScheme.surfaceVariant.copy(alpha = 0.4f))
                         .padding(horizontal = 10.dp, vertical = 6.dp)
                 ) {
                     if (entry.image != null) {
@@ -1187,8 +1177,8 @@ private fun StaffSection(staff: List<AniListStaffEntry>) {
                         Spacer(Modifier.width(8.dp))
                     }
                     Column {
-                        Text(entry.name, fontSize = 12.sp, color = SilverLight, fontWeight = FontWeight.Medium, maxLines = 1, overflow = TextOverflow.Ellipsis)
-                        Text(entry.role, fontSize = 10.sp, color = SilverDark)
+                        Text(entry.name, fontSize = 12.sp, color = MaterialTheme.colorScheme.onSurface, fontWeight = FontWeight.Medium, maxLines = 1, overflow = TextOverflow.Ellipsis)
+                        Text(entry.role, fontSize = 10.sp, color = MaterialTheme.colorScheme.onSurfaceVariant)
                     }
                 }
             }
@@ -1203,7 +1193,7 @@ private fun SynonymsSection(synonyms: List<String>) {
         Spacer(modifier = Modifier.height(10.dp))
         Text(
             text = synonyms.joinToString("  ·  "),
-            color = SilverDark,
+            color = MaterialTheme.colorScheme.onSurfaceVariant,
             fontSize = 13.sp,
             lineHeight = 20.sp
         )
@@ -1217,7 +1207,7 @@ private fun SynopsisSection(description: String) {
         Spacer(modifier = Modifier.height(10.dp))
         Text(
             text = description.replace(Regex("<[^>]*>"), ""),
-            color = SilverLight.copy(alpha = 0.85f),
+            color = MaterialTheme.colorScheme.onSurface.copy(alpha = 0.85f),
             fontSize = 14.sp,
             lineHeight = 22.sp
         )
@@ -1237,14 +1227,14 @@ private fun ExternalLinksSection(links: List<com.blissless.oni.data.AniListExter
                 Row(
                     modifier = Modifier
                         .clip(RoundedCornerShape(8.dp))
-                        .background(BlueAccent.copy(alpha = 0.1f))
-                        .border(0.5.dp, BlueAccent.copy(alpha = 0.3f), RoundedCornerShape(8.dp))
+                        .background(MaterialTheme.colorScheme.primary.copy(alpha = 0.1f))
+                        .border(0.5.dp, MaterialTheme.colorScheme.primary.copy(alpha = 0.3f), RoundedCornerShape(8.dp))
                         .padding(horizontal = 10.dp, vertical = 5.dp),
                     verticalAlignment = Alignment.CenterVertically
                 ) {
-                    Icon(Icons.Default.Link, contentDescription = null, tint = BlueLight, modifier = Modifier.size(12.dp))
+                    Icon(Icons.Default.Link, contentDescription = null, tint = MaterialTheme.colorScheme.primaryContainer, modifier = Modifier.size(12.dp))
                     Spacer(Modifier.width(6.dp))
-                    Text(link.site, fontSize = 11.sp, color = BlueLight, fontWeight = FontWeight.Medium)
+                    Text(link.site, fontSize = 11.sp, color = MaterialTheme.colorScheme.primaryContainer, fontWeight = FontWeight.Medium)
                 }
             }
         }
@@ -1253,7 +1243,7 @@ private fun ExternalLinksSection(links: List<com.blissless.oni.data.AniListExter
 
 @Composable
 private fun SectionDivider() {
-    HorizontalDivider(color = GlassStroke, modifier = Modifier.padding(horizontal = 16.dp))
+    HorizontalDivider(color = MaterialTheme.colorScheme.outlineVariant, modifier = Modifier.padding(horizontal = 16.dp))
 }
 
 @Composable
@@ -1272,7 +1262,7 @@ fun ChapterProgressDialog(
 
     AlertDialog(
         onDismissRequest = onDismiss,
-        containerColor = DarkSurface,
+        containerColor = MaterialTheme.colorScheme.surface,
         shape = RoundedCornerShape(20.dp),
         title = {
             Text("Enter the chapter you last read", color = Color.White, fontWeight = FontWeight.Bold)
@@ -1281,7 +1271,7 @@ fun ChapterProgressDialog(
             Column {
                 Text(
                     text = "Type an exact chapter number (up to $totalChapters):",
-                    color = SilverDark,
+                    color = MaterialTheme.colorScheme.onSurfaceVariant,
                     fontSize = 13.sp
                 )
                 Spacer(Modifier.height(12.dp))
@@ -1293,8 +1283,8 @@ fun ChapterProgressDialog(
                     colors = OutlinedTextFieldDefaults.colors(
                         focusedTextColor = Color.White,
                         unfocusedTextColor = Color.White,
-                        cursorColor = BlueAccent,
-                        focusedBorderColor = BlueAccent,
+                        cursorColor = MaterialTheme.colorScheme.primary,
+                        focusedBorderColor = MaterialTheme.colorScheme.primary,
                         unfocusedBorderColor = Color.White.copy(alpha = 0.3f)
                     ),
                     modifier = Modifier.fillMaxWidth(),
@@ -1310,7 +1300,7 @@ fun ChapterProgressDialog(
                         onSet(chapter)
                     }
                 },
-                colors = ButtonDefaults.buttonColors(containerColor = BlueAccent),
+                colors = ButtonDefaults.buttonColors(containerColor = MaterialTheme.colorScheme.primary),
                 shape = RoundedCornerShape(12.dp)
             ) {
                 Text("Set", fontWeight = FontWeight.Bold)
@@ -1318,7 +1308,7 @@ fun ChapterProgressDialog(
         },
         dismissButton = {
             TextButton(onClick = onDismiss) {
-                Text("Cancel", color = SilverDark)
+                Text("Cancel", color = MaterialTheme.colorScheme.onSurfaceVariant)
             }
         }
     )

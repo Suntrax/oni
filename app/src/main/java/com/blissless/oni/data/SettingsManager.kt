@@ -14,6 +14,8 @@ class SettingsManager(context: Context) {
         private const val KEY_SELECTED_EXTENSION = "selected_extension_authority"
         private const val KEY_READER_MODE = "reader_mode"
         private const val KEY_LOCK_READER_ROTATION = "lock_reader_rotation"
+        private const val KEY_MATERIAL3_COLOR = "material3_color"
+        private const val KEY_MONOCHROME_THEME = "monochrome_theme"
         private const val DEFAULT_SYNC_THRESHOLD = 90
     }
 
@@ -68,6 +70,22 @@ class SettingsManager(context: Context) {
 
     fun setLockReaderRotation(enabled: Boolean) {
         prefs.edit().putBoolean(KEY_LOCK_READER_ROTATION, enabled).apply()
+    }
+
+    fun getMaterial3Color(): Boolean {
+        return prefs.getBoolean(KEY_MATERIAL3_COLOR, false)
+    }
+
+    fun setMaterial3Color(enabled: Boolean) {
+        prefs.edit().putBoolean(KEY_MATERIAL3_COLOR, enabled).apply()
+    }
+
+    fun getMonochromeTheme(): Boolean {
+        return prefs.getBoolean(KEY_MONOCHROME_THEME, false)
+    }
+
+    fun setMonochromeTheme(enabled: Boolean) {
+        prefs.edit().putBoolean(KEY_MONOCHROME_THEME, enabled).apply()
     }
 }
 

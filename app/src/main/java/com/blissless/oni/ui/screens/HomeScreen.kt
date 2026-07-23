@@ -48,16 +48,8 @@ import coil.compose.AsyncImage
 import com.blissless.oni.data.MangaSearchResult
 import com.blissless.oni.data.MangaTrack
 import com.blissless.oni.viewmodel.MainViewModel
-import com.blissless.oni.ui.theme.BlueAccent
-import com.blissless.oni.ui.theme.BlueLight
-import com.blissless.oni.ui.theme.DarkBackground
-import com.blissless.oni.ui.theme.DarkCard
-import com.blissless.oni.ui.theme.DarkSurface
-import com.blissless.oni.ui.theme.GlassStroke
 import com.blissless.oni.ui.theme.GradientBlue
 import com.blissless.oni.ui.theme.GradientPurple
-import com.blissless.oni.ui.theme.SilverDark
-import com.blissless.oni.ui.theme.SilverLight
 
 @Composable
 fun ResumeTrackCard(
@@ -74,16 +66,16 @@ fun ResumeTrackCard(
             .clip(RoundedCornerShape(16.dp))
             .clickable(onClick = onClick),
         shape = RoundedCornerShape(16.dp),
-        colors = CardDefaults.cardColors(containerColor = DarkCard),
+        colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.surfaceContainerLow),
         elevation = CardDefaults.cardElevation(defaultElevation = 0.dp),
-        border = BorderStroke(0.5.dp, GlassStroke)
+        border = BorderStroke(0.5.dp, MaterialTheme.colorScheme.outlineVariant)
     ) {
         Column {
             Box(
                 modifier = Modifier
                     .fillMaxWidth()
                     .height(210.dp)
-                    .background(DarkSurface),
+                    .background(MaterialTheme.colorScheme.surface),
                 contentAlignment = Alignment.Center
             ) {
                 if (track.coverUrl != null) {
@@ -97,7 +89,7 @@ fun ResumeTrackCard(
                     Text(
                         text = track.title.take(2).uppercase(),
                         style = MaterialTheme.typography.titleLarge,
-                        color = BlueAccent,
+                        color = MaterialTheme.colorScheme.primary,
                         fontWeight = FontWeight.Bold
                     )
                 }
@@ -110,7 +102,7 @@ fun ResumeTrackCard(
                             Brush.verticalGradient(
                                 colors = listOf(
                                     Color.Transparent,
-                                    DarkCard.copy(alpha = 0.95f)
+                                    MaterialTheme.colorScheme.surfaceContainerLow.copy(alpha = 0.95f)
                                 )
                             )
                         )
@@ -120,19 +112,33 @@ fun ResumeTrackCard(
                 Text(
                     text = "$progressPercent%",
                     style = MaterialTheme.typography.labelMedium,
-                    color = BlueAccent,
+                    color = MaterialTheme.colorScheme.primary,
                     fontWeight = FontWeight.Bold,
                     modifier = Modifier
                         .align(Alignment.TopStart)
                         .padding(8.dp)
                         .background(
-                            DarkCard.copy(alpha = 0.8f),
+                            MaterialTheme.colorScheme.surfaceContainerLow.copy(alpha = 0.8f),
                             RoundedCornerShape(6.dp)
                         )
                         .padding(horizontal = 6.dp, vertical = 2.dp)
                 )
 
-                // Gradient overlay at bottom
+                Text(
+                    text = "Ch. ${maxOf(track.currentChapterNumber, 0) + 1}",
+                    style = MaterialTheme.typography.labelSmall,
+                    color = Color.White,
+                    fontWeight = FontWeight.Bold,
+                    modifier = Modifier
+                        .align(Alignment.TopEnd)
+                        .padding(8.dp)
+                        .background(
+                            MaterialTheme.colorScheme.primary.copy(alpha = 0.85f),
+                            RoundedCornerShape(6.dp)
+                        )
+                        .padding(horizontal = 6.dp, vertical = 2.dp)
+                )
+
                 Box(
                     modifier = Modifier
                         .fillMaxWidth()
@@ -141,14 +147,13 @@ fun ResumeTrackCard(
                             Brush.verticalGradient(
                                 colors = listOf(
                                     Color.Transparent,
-                                    DarkCard.copy(alpha = 0.9f)
+                                    MaterialTheme.colorScheme.surfaceContainerLow.copy(alpha = 0.9f)
                                 )
                             )
                         )
                         .align(Alignment.BottomCenter)
                 )
 
-                // Progress bar at bottom of image
                 Box(
                     modifier = Modifier
                         .fillMaxWidth()
@@ -206,35 +211,28 @@ fun ResumeTrackCard(
                 Spacer(modifier = Modifier.height(6.dp))
                 Row(
                     modifier = Modifier.fillMaxWidth(),
-                    horizontalArrangement = Arrangement.SpaceBetween,
+                    horizontalArrangement = Arrangement.End,
                     verticalAlignment = Alignment.CenterVertically
                 ) {
-                    Text(
-                        text = "Ch. ${maxOf(track.currentChapterNumber, 0) + 1}",
-                        style = MaterialTheme.typography.labelSmall,
-                        color = BlueLight,
-                        fontWeight = FontWeight.SemiBold,
-                        letterSpacing = 0.3.sp
-                    )
                     Box(
                         modifier = Modifier
                             .size(32.dp)
                             .clip(CircleShape)
-                            .background(BlueAccent.copy(alpha = 0.2f))
+                            .background(MaterialTheme.colorScheme.primary.copy(alpha = 0.2f))
                             .clickable(onClick = onClick),
                         contentAlignment = Alignment.Center
                     ) {
                         Icon(
                             imageVector = Icons.Default.PlayArrow,
                             contentDescription = "Resume",
-                    tint = BlueAccent,
-                    modifier = Modifier.size(18.dp)
+                            tint = MaterialTheme.colorScheme.primary,
+                            modifier = Modifier.size(18.dp)
                         )
+                    }
+                }
             }
         }
     }
-}
-}
 }
 
 @Composable
@@ -385,16 +383,16 @@ fun TrackingCard(
             .clip(RoundedCornerShape(16.dp))
             .clickable(onClick = onClick),
         shape = RoundedCornerShape(16.dp),
-        colors = CardDefaults.cardColors(containerColor = DarkCard),
+        colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.surfaceContainerLow),
         elevation = CardDefaults.cardElevation(defaultElevation = 0.dp),
-        border = BorderStroke(0.5.dp, GlassStroke)
+        border = BorderStroke(0.5.dp, MaterialTheme.colorScheme.outlineVariant)
     ) {
         Column {
             Box(
                 modifier = Modifier
                     .fillMaxWidth()
                     .height(190.dp)
-                    .background(DarkSurface),
+                    .background(MaterialTheme.colorScheme.surface),
                 contentAlignment = Alignment.Center
             ) {
                 if (track.coverUrl != null) {
@@ -408,12 +406,27 @@ fun TrackingCard(
                     Text(
                         text = track.title.take(2).uppercase(),
                         style = MaterialTheme.typography.titleLarge,
-                        color = BlueAccent,
+                        color = MaterialTheme.colorScheme.primary,
                         fontWeight = FontWeight.Bold
                     )
                 }
 
-                // Gradient overlay at bottom
+                val displayTotal = if (track.totalChapters > 0) track.totalChapters.toString() else "?"
+                Text(
+                    text = "Ch. ${maxOf(track.currentChapterNumber, 0)}/$displayTotal",
+                    style = MaterialTheme.typography.labelSmall,
+                    color = Color.White,
+                    fontWeight = FontWeight.Bold,
+                    modifier = Modifier
+                        .align(Alignment.TopStart)
+                        .padding(8.dp)
+                        .background(
+                            MaterialTheme.colorScheme.primary.copy(alpha = 0.85f),
+                            RoundedCornerShape(6.dp)
+                        )
+                        .padding(horizontal = 6.dp, vertical = 2.dp)
+                )
+
                 Box(
                     modifier = Modifier
                         .fillMaxWidth()
@@ -422,7 +435,7 @@ fun TrackingCard(
                             Brush.verticalGradient(
                                 colors = listOf(
                                     Color.Transparent,
-                                    DarkCard.copy(alpha = 0.9f)
+                                    MaterialTheme.colorScheme.surfaceContainerLow.copy(alpha = 0.9f)
                                 )
                             )
                         )
@@ -464,22 +477,7 @@ fun TrackingCard(
                     letterSpacing = 0.2.sp,
                     modifier = Modifier.heightIn(min = 36.dp)
                 )
-                Spacer(modifier = Modifier.height(6.dp))
-                Row(
-                    modifier = Modifier.fillMaxWidth(),
-                    horizontalArrangement = Arrangement.SpaceBetween,
-                    verticalAlignment = Alignment.CenterVertically
-                ) {
-                    val displayTotal = if (track.totalChapters > 0) track.totalChapters.toString() else "?"
-                    Text(
-                        text = "Ch. ${maxOf(track.currentChapterNumber, 0)}/$displayTotal",
-                        style = MaterialTheme.typography.labelSmall,
-                        color = BlueLight,
-                        fontWeight = FontWeight.SemiBold,
-                        letterSpacing = 0.3.sp
-                    )
+            }
         }
     }
-}
-}
 }

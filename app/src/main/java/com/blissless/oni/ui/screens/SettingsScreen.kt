@@ -78,19 +78,6 @@ import androidx.lifecycle.viewmodel.compose.viewModel
 import com.blissless.oni.BuildConfig
 import com.blissless.oni.MainActivity
 import com.blissless.oni.data.ReaderMode
-import com.blissless.oni.ui.theme.BlueAccent
-import com.blissless.oni.ui.theme.BlueDark
-import com.blissless.oni.ui.theme.BlueLight
-import com.blissless.oni.ui.theme.DarkBackground
-import com.blissless.oni.ui.theme.DarkCard
-import com.blissless.oni.ui.theme.DarkElevated
-import com.blissless.oni.ui.theme.GlassStroke
-import com.blissless.oni.ui.theme.DarkSurface
-import com.blissless.oni.ui.theme.DarkSurfaceVariant
-import com.blissless.oni.ui.theme.Silver
-import com.blissless.oni.ui.theme.SilverDark
-import com.blissless.oni.ui.theme.SilverLight
-import com.blissless.oni.ui.theme.StatusDropped
 import com.blissless.oni.update.UpdateUiState
 import com.blissless.oni.update.UpdateViewModel
 import com.blissless.oni.viewmodel.MainViewModel
@@ -100,6 +87,7 @@ private sealed class SettingsNavRoute {
     data object Main : SettingsNavRoute()
     data object AccountSync : SettingsNavRoute()
     data object Reader : SettingsNavRoute()
+    data object Appearance : SettingsNavRoute()
     data object UpdatesAbout : SettingsNavRoute()
     data object Extensions : SettingsNavRoute()
 }
@@ -135,6 +123,10 @@ fun SettingsScreen(viewModel: MainViewModel) {
                 viewModel = viewModel,
                 onBack = { currentRoute = SettingsNavRoute.Main }
             )
+            is SettingsNavRoute.Appearance -> AppearanceScreen(
+                viewModel = viewModel,
+                onBack = { currentRoute = SettingsNavRoute.Main }
+            )
             is SettingsNavRoute.UpdatesAbout -> UpdatesAboutScreen(
                 viewModel = viewModel,
                 onBack = { currentRoute = SettingsNavRoute.Main }
@@ -152,14 +144,14 @@ private fun SettingsMainScreen(onNavigate: (SettingsNavRoute) -> Unit) {
     Column(
         modifier = Modifier
             .fillMaxSize()
-            .background(DarkBackground)
+            .background(MaterialTheme.colorScheme.background)
             .verticalScroll(rememberScrollState())
     ) {
         Spacer(Modifier.height(48.dp))
         Text(
             text = "Settings",
             style = MaterialTheme.typography.headlineMedium,
-            color = SilverLight,
+            color = MaterialTheme.colorScheme.onSurface,
             fontWeight = FontWeight.Bold,
             letterSpacing = 0.5.sp,
             modifier = Modifier.padding(horizontal = 20.dp, vertical = 16.dp)
@@ -171,9 +163,9 @@ private fun SettingsMainScreen(onNavigate: (SettingsNavRoute) -> Unit) {
                 icon = Icons.Default.AccountCircle,
                 title = "Account & Sync",
                 subtitle = "AniList login and sync settings",
-                tint = BlueAccent,
+                tint = MaterialTheme.colorScheme.primary,
                 trailing = {
-                    Icon(Icons.AutoMirrored.Filled.ArrowForwardIos, contentDescription = null, tint = SilverDark, modifier = Modifier.size(16.dp))
+                    Icon(Icons.AutoMirrored.Filled.ArrowForwardIos, contentDescription = null, tint = MaterialTheme.colorScheme.onSurfaceVariant, modifier = Modifier.size(16.dp))
                 },
                 onClick = { onNavigate(SettingsNavRoute.AccountSync) }
             )
@@ -186,11 +178,26 @@ private fun SettingsMainScreen(onNavigate: (SettingsNavRoute) -> Unit) {
                 icon = Icons.Default.Update,
                 title = "Reader",
                 subtitle = "Reading mode and rotation",
-                tint = BlueAccent,
+                tint = MaterialTheme.colorScheme.primary,
                 trailing = {
-                    Icon(Icons.AutoMirrored.Filled.ArrowForwardIos, contentDescription = null, tint = SilverDark, modifier = Modifier.size(16.dp))
+                    Icon(Icons.AutoMirrored.Filled.ArrowForwardIos, contentDescription = null, tint = MaterialTheme.colorScheme.onSurfaceVariant, modifier = Modifier.size(16.dp))
                 },
                 onClick = { onNavigate(SettingsNavRoute.Reader) }
+            )
+        }
+
+        Spacer(Modifier.height(20.dp))
+
+        SettingsCard {
+            SettingsNavItem(
+                icon = Icons.Default.Update,
+                title = "Appearance",
+                subtitle = "Theme and color settings",
+                tint = MaterialTheme.colorScheme.primary,
+                trailing = {
+                    Icon(Icons.AutoMirrored.Filled.ArrowForwardIos, contentDescription = null, tint = MaterialTheme.colorScheme.onSurfaceVariant, modifier = Modifier.size(16.dp))
+                },
+                onClick = { onNavigate(SettingsNavRoute.Appearance) }
             )
         }
 
@@ -201,9 +208,9 @@ private fun SettingsMainScreen(onNavigate: (SettingsNavRoute) -> Unit) {
                 icon = Icons.Default.Download,
                 title = "Updates & About",
                 subtitle = "App updates and version info",
-                tint = BlueAccent,
+                tint = MaterialTheme.colorScheme.primary,
                 trailing = {
-                    Icon(Icons.AutoMirrored.Filled.ArrowForwardIos, contentDescription = null, tint = SilverDark, modifier = Modifier.size(16.dp))
+                    Icon(Icons.AutoMirrored.Filled.ArrowForwardIos, contentDescription = null, tint = MaterialTheme.colorScheme.onSurfaceVariant, modifier = Modifier.size(16.dp))
                 },
                 onClick = { onNavigate(SettingsNavRoute.UpdatesAbout) }
             )
@@ -216,9 +223,9 @@ private fun SettingsMainScreen(onNavigate: (SettingsNavRoute) -> Unit) {
                 icon = Icons.Default.Widgets,
                 title = "Extensions",
                 subtitle = "Manage manga source extensions",
-                tint = BlueAccent,
+                tint = MaterialTheme.colorScheme.primary,
                 trailing = {
-                    Icon(Icons.AutoMirrored.Filled.ArrowForwardIos, contentDescription = null, tint = SilverDark, modifier = Modifier.size(16.dp))
+                    Icon(Icons.AutoMirrored.Filled.ArrowForwardIos, contentDescription = null, tint = MaterialTheme.colorScheme.onSurfaceVariant, modifier = Modifier.size(16.dp))
                 },
                 onClick = { onNavigate(SettingsNavRoute.Extensions) }
             )
@@ -246,16 +253,16 @@ private fun AccountSyncScreen(viewModel: MainViewModel, onBack: () -> Unit) {
     Scaffold(
         topBar = {
             TopAppBar(
-                title = { Text("Account & Sync", color = SilverLight) },
+                title = { Text("Account & Sync", color = MaterialTheme.colorScheme.onSurface) },
                 navigationIcon = {
                     IconButton(onClick = onBack) {
-                        Icon(Icons.AutoMirrored.Filled.ArrowBack, contentDescription = "Back", tint = SilverLight)
+                        Icon(Icons.AutoMirrored.Filled.ArrowBack, contentDescription = "Back", tint = MaterialTheme.colorScheme.onSurface)
                     }
                 },
-                colors = TopAppBarDefaults.topAppBarColors(containerColor = DarkBackground)
+                colors = TopAppBarDefaults.topAppBarColors(containerColor = MaterialTheme.colorScheme.background)
             )
         },
-        containerColor = DarkBackground
+        containerColor = MaterialTheme.colorScheme.background
     ) { padding ->
         Column(
             modifier = Modifier
@@ -277,34 +284,34 @@ private fun AccountSyncScreen(viewModel: MainViewModel, onBack: () -> Unit) {
                             modifier = Modifier
                                 .size(40.dp)
                                 .clip(RoundedCornerShape(12.dp))
-                                .background(BlueAccent.copy(alpha = 0.15f)),
+                                .background(MaterialTheme.colorScheme.primary.copy(alpha = 0.15f)),
                             contentAlignment = Alignment.Center
                         ) {
                             Icon(
                                 Icons.Default.AccountCircle,
                                 contentDescription = null,
-                                tint = BlueAccent,
+                                tint = MaterialTheme.colorScheme.primary,
                                 modifier = Modifier.size(24.dp)
                             )
                         }
                         Spacer(Modifier.width(12.dp))
                         Column(modifier = Modifier.weight(1f)) {
-                            Text("Logged in as $anilistUsername", color = SilverLight, style = MaterialTheme.typography.bodyLarge)
+                            Text("Logged in as $anilistUsername", color = MaterialTheme.colorScheme.onSurface, style = MaterialTheme.typography.bodyLarge)
                             Spacer(Modifier.height(4.dp))
                             Row(verticalAlignment = Alignment.CenterVertically) {
                                 Box(
                                     modifier = Modifier
                                         .clip(RoundedCornerShape(4.dp))
-                                        .background(BlueAccent.copy(alpha = 0.15f))
+                                        .background(MaterialTheme.colorScheme.primary.copy(alpha = 0.15f))
                                         .padding(horizontal = 6.dp, vertical = 2.dp)
                                 ) {
-                                    Text("AniList Auth", color = BlueLight, style = MaterialTheme.typography.labelSmall, fontWeight = FontWeight.Medium)
+                                    Text("AniList Auth", color = MaterialTheme.colorScheme.primaryContainer, style = MaterialTheme.typography.labelSmall, fontWeight = FontWeight.Medium)
                                 }
                             }
                         }
                         Text(
                             "Logout",
-                            color = StatusDropped,
+                            color = MaterialTheme.colorScheme.error,
                             style = MaterialTheme.typography.bodySmall,
                             fontWeight = FontWeight.Medium,
                             modifier = Modifier.clickable { showLogoutDialog = true }
@@ -320,19 +327,19 @@ private fun AccountSyncScreen(viewModel: MainViewModel, onBack: () -> Unit) {
                         if (isSyncing) {
                             CircularProgressIndicator(
                                 modifier = Modifier.size(20.dp),
-                                color = BlueAccent,
+                                color = MaterialTheme.colorScheme.primary,
                                 strokeWidth = 2.dp
                             )
                             Spacer(Modifier.width(12.dp))
-                            Text("Syncing...", color = SilverDark, style = MaterialTheme.typography.bodySmall)
+                            Text("Syncing...", color = MaterialTheme.colorScheme.onSurfaceVariant, style = MaterialTheme.typography.bodySmall)
                         } else {
                             OutlinedButton(
                                 onClick = { viewModel.syncAnilistManga() },
                                 shape = RoundedCornerShape(12.dp)
                             ) {
-                                Icon(Icons.Default.Sync, contentDescription = null, modifier = Modifier.size(18.dp), tint = BlueAccent)
+                                Icon(Icons.Default.Sync, contentDescription = null, modifier = Modifier.size(18.dp), tint = MaterialTheme.colorScheme.primary)
                                 Spacer(Modifier.width(6.dp))
-                                Text("Sync Now", color = BlueAccent)
+                                Text("Sync Now", color = MaterialTheme.colorScheme.primary)
                             }
                         }
                     }
@@ -341,9 +348,9 @@ private fun AccountSyncScreen(viewModel: MainViewModel, onBack: () -> Unit) {
                         icon = Icons.Default.AccountCircle,
                         title = "AniList Account",
                         subtitle = "Log in to sync your list",
-                        tint = BlueAccent,
+                        tint = MaterialTheme.colorScheme.primary,
                         trailing = {
-                            Text("Login", color = BlueAccent, style = MaterialTheme.typography.bodySmall, fontWeight = FontWeight.Medium)
+                            Text("Login", color = MaterialTheme.colorScheme.primary, style = MaterialTheme.typography.bodySmall, fontWeight = FontWeight.Medium)
                         },
                         onClick = {
                             val intent = Intent(Intent.ACTION_VIEW, Uri.parse(viewModel.getAnilistAuthUrl()))
@@ -366,12 +373,12 @@ private fun AccountSyncScreen(viewModel: MainViewModel, onBack: () -> Unit) {
                         horizontalArrangement = Arrangement.SpaceBetween,
                         verticalAlignment = Alignment.CenterVertically
                     ) {
-                        Text("Auto-sync Threshold", color = SilverLight, style = MaterialTheme.typography.bodyLarge)
-                        Text("$syncThreshold%", color = BlueAccent, style = MaterialTheme.typography.bodyMedium, fontWeight = FontWeight.Bold)
+                        Text("Auto-sync Threshold", color = MaterialTheme.colorScheme.onSurface, style = MaterialTheme.typography.bodyLarge)
+                        Text("$syncThreshold%", color = MaterialTheme.colorScheme.primary, style = MaterialTheme.typography.bodyMedium, fontWeight = FontWeight.Bold)
                     }
                     Text(
                         "Sync progress to AniList after reading this % of a chapter",
-                        color = SilverDark,
+                        color = MaterialTheme.colorScheme.onSurfaceVariant,
                         style = MaterialTheme.typography.bodySmall
                     )
                     Spacer(Modifier.height(8.dp))
@@ -381,10 +388,10 @@ private fun AccountSyncScreen(viewModel: MainViewModel, onBack: () -> Unit) {
                         valueRange = 75f..100f,
                         modifier = Modifier.fillMaxWidth(),
                         colors = SliderDefaults.colors(
-                            thumbColor = BlueAccent,
-                            activeTrackColor = BlueAccent,
-                            inactiveTrackColor = DarkSurfaceVariant,
-                            inactiveTickColor = BlueAccent.copy(alpha = 0.3f)
+                            thumbColor = MaterialTheme.colorScheme.primary,
+                            activeTrackColor = MaterialTheme.colorScheme.primary,
+                            inactiveTrackColor = MaterialTheme.colorScheme.surfaceVariant,
+                            inactiveTickColor = MaterialTheme.colorScheme.primary.copy(alpha = 0.3f)
                         ),
                         steps = 24
                     )
@@ -398,10 +405,10 @@ private fun AccountSyncScreen(viewModel: MainViewModel, onBack: () -> Unit) {
     if (showLogoutDialog) {
         AlertDialog(
             onDismissRequest = { showLogoutDialog = false },
-            containerColor = DarkCard,
+            containerColor = MaterialTheme.colorScheme.surfaceContainerLow,
             shape = RoundedCornerShape(20.dp),
-            title = { Text("Logout", color = SilverLight, fontWeight = FontWeight.Bold) },
-            text = { Text("Are you sure you want to logout from AniList? Your locally synced manga will not be removed.", color = SilverDark) },
+            title = { Text("Logout", color = MaterialTheme.colorScheme.onSurface, fontWeight = FontWeight.Bold) },
+            text = { Text("Are you sure you want to logout from AniList? Your locally synced manga will not be removed.", color = MaterialTheme.colorScheme.onSurfaceVariant) },
             confirmButton = {
                 Button(
                     onClick = {
@@ -409,13 +416,13 @@ private fun AccountSyncScreen(viewModel: MainViewModel, onBack: () -> Unit) {
                         (context as? MainActivity)?.resetAuthFlags()
                         showLogoutDialog = false
                     },
-                    colors = ButtonDefaults.buttonColors(containerColor = StatusDropped),
+                    colors = ButtonDefaults.buttonColors(containerColor = MaterialTheme.colorScheme.error),
                     shape = RoundedCornerShape(12.dp)
                 ) { Text("Logout") }
             },
             dismissButton = {
                 TextButton(onClick = { showLogoutDialog = false }) {
-                    Text("Cancel", color = SilverDark)
+                    Text("Cancel", color = MaterialTheme.colorScheme.onSurfaceVariant)
                 }
             }
         )
@@ -424,28 +431,28 @@ private fun AccountSyncScreen(viewModel: MainViewModel, onBack: () -> Unit) {
     if (showMergeDialog) {
         AlertDialog(
             onDismissRequest = { },
-            containerColor = DarkCard,
+            containerColor = MaterialTheme.colorScheme.surfaceContainerLow,
             shape = RoundedCornerShape(20.dp),
-            title = { Text("Local manga found", color = SilverLight, fontWeight = FontWeight.Bold) },
-            text = { Text("You have locally saved manga. How would you like to proceed?", color = SilverDark) },
+            title = { Text("Local manga found", color = MaterialTheme.colorScheme.onSurface, fontWeight = FontWeight.Bold) },
+            text = { Text("You have locally saved manga. How would you like to proceed?", color = MaterialTheme.colorScheme.onSurfaceVariant) },
             confirmButton = {
                 Column(modifier = Modifier.fillMaxWidth(), verticalArrangement = Arrangement.spacedBy(8.dp)) {
                     Button(
                         onClick = { viewModel.overwriteAnilistWithLocal() },
                         modifier = Modifier.fillMaxWidth(),
-                        colors = ButtonDefaults.buttonColors(containerColor = BlueAccent),
+                        colors = ButtonDefaults.buttonColors(containerColor = MaterialTheme.colorScheme.primary),
                         shape = RoundedCornerShape(12.dp)
                     ) { Text("Overwrite AniList with local") }
                     Button(
                         onClick = { viewModel.discardLocalAndSync() },
                         modifier = Modifier.fillMaxWidth(),
-                        colors = ButtonDefaults.buttonColors(containerColor = StatusDropped),
+                        colors = ButtonDefaults.buttonColors(containerColor = MaterialTheme.colorScheme.error),
                         shape = RoundedCornerShape(12.dp)
                     ) { Text("Discard local, use AniList") }
                     TextButton(
                         onClick = { viewModel.mergeLocalAndAnilist() },
                         modifier = Modifier.fillMaxWidth()
-                    ) { Text("Merge \u2013 only add new entries", color = BlueAccent) }
+                    ) { Text("Merge \u2013 only add new entries", color = MaterialTheme.colorScheme.primary) }
                 }
             }
         )
@@ -461,16 +468,16 @@ private fun ReaderSettingsScreen(viewModel: MainViewModel, onBack: () -> Unit) {
     Scaffold(
         topBar = {
             TopAppBar(
-                title = { Text("Reader", color = SilverLight) },
+                title = { Text("Reader", color = MaterialTheme.colorScheme.onSurface) },
                 navigationIcon = {
                     IconButton(onClick = onBack) {
-                        Icon(Icons.AutoMirrored.Filled.ArrowBack, contentDescription = "Back", tint = SilverLight)
+                        Icon(Icons.AutoMirrored.Filled.ArrowBack, contentDescription = "Back", tint = MaterialTheme.colorScheme.onSurface)
                     }
                 },
-                colors = TopAppBarDefaults.topAppBarColors(containerColor = DarkBackground)
+                colors = TopAppBarDefaults.topAppBarColors(containerColor = MaterialTheme.colorScheme.background)
             )
         },
-        containerColor = DarkBackground
+        containerColor = MaterialTheme.colorScheme.background
     ) { padding ->
         Column(
             modifier = Modifier
@@ -488,7 +495,7 @@ private fun ReaderSettingsScreen(viewModel: MainViewModel, onBack: () -> Unit) {
                 ) {
                     Text(
                         "Choose how pages are laid out. Paged modes show one page per screen; vertical scrolls continuously.",
-                        color = SilverDark,
+                        color = MaterialTheme.colorScheme.onSurfaceVariant,
                         style = MaterialTheme.typography.bodySmall
                     )
                     Spacer(Modifier.height(12.dp))
@@ -506,12 +513,12 @@ private fun ReaderSettingsScreen(viewModel: MainViewModel, onBack: () -> Unit) {
                                     .size(20.dp)
                                     .clip(RoundedCornerShape(10.dp))
                                     .background(
-                                        if (readerMode == mode) BlueAccent
+                                        if (readerMode == mode) MaterialTheme.colorScheme.primary
                                         else Color.Transparent
                                     )
                                     .border(
                                         width = if (readerMode == mode) 0.dp else 1.dp,
-                                        color = if (readerMode == mode) BlueAccent else SilverDark,
+                                        color = if (readerMode == mode) MaterialTheme.colorScheme.primary else MaterialTheme.colorScheme.onSurfaceVariant,
                                         shape = RoundedCornerShape(10.dp)
                                     ),
                                 contentAlignment = Alignment.Center
@@ -527,14 +534,14 @@ private fun ReaderSettingsScreen(viewModel: MainViewModel, onBack: () -> Unit) {
                             }
                             Spacer(Modifier.width(12.dp))
                             Column(modifier = Modifier.weight(1f)) {
-                                Text(mode.displayLabel, color = SilverLight, style = MaterialTheme.typography.bodyMedium, fontWeight = FontWeight.Medium)
+                                Text(mode.displayLabel, color = MaterialTheme.colorScheme.onSurface, style = MaterialTheme.typography.bodyMedium, fontWeight = FontWeight.Medium)
                                 Text(
                                     text = when (mode) {
                                         ReaderMode.VERTICAL_SCROLL -> "Webtoon-style continuous scroll"
                                         ReaderMode.LEFT_TO_RIGHT -> "One page per screen, swipe left for next"
                                         ReaderMode.RIGHT_TO_LEFT -> "One page per screen, swipe right for next (manga style)"
                                     },
-                                    color = SilverDark,
+                                    color = MaterialTheme.colorScheme.onSurfaceVariant,
                                     style = MaterialTheme.typography.bodySmall
                                 )
                             }
@@ -554,10 +561,10 @@ private fun ReaderSettingsScreen(viewModel: MainViewModel, onBack: () -> Unit) {
                     horizontalArrangement = Arrangement.SpaceBetween
                 ) {
                     Column(modifier = Modifier.weight(1f)) {
-                        Text("Lock Rotation", color = SilverLight, style = MaterialTheme.typography.bodyLarge)
+                        Text("Lock Rotation", color = MaterialTheme.colorScheme.onSurface, style = MaterialTheme.typography.bodyLarge)
                         Text(
                             "Lock app to portrait mode. Turn off to allow landscape.",
-                            color = SilverDark,
+                            color = MaterialTheme.colorScheme.onSurfaceVariant,
                             style = MaterialTheme.typography.bodySmall
                         )
                     }
@@ -565,12 +572,101 @@ private fun ReaderSettingsScreen(viewModel: MainViewModel, onBack: () -> Unit) {
                         checked = lockReaderRotation,
                         onCheckedChange = { viewModel.setLockReaderRotation(it) },
                         colors = SwitchDefaults.colors(
-                            checkedThumbColor = SilverLight,
-                            checkedTrackColor = BlueAccent,
-                            uncheckedThumbColor = SilverDark,
-                            uncheckedTrackColor = DarkSurfaceVariant
+                            checkedThumbColor = MaterialTheme.colorScheme.onSurface,
+                            checkedTrackColor = MaterialTheme.colorScheme.primary,
+                            uncheckedThumbColor = MaterialTheme.colorScheme.onSurfaceVariant,
+                            uncheckedTrackColor = MaterialTheme.colorScheme.surfaceVariant
                         )
                     )
+                }
+            }
+
+            Spacer(Modifier.height(100.dp))
+        }
+    }
+}
+
+@OptIn(ExperimentalMaterial3Api::class)
+@Composable
+private fun AppearanceScreen(viewModel: MainViewModel, onBack: () -> Unit) {
+    val useMaterial3Color by viewModel.useMaterial3Color.collectAsState()
+    val monochromeTheme by viewModel.monochromeTheme.collectAsState()
+
+    Scaffold(
+        topBar = {
+            TopAppBar(
+                title = { Text("Appearance", color = MaterialTheme.colorScheme.onSurface) },
+                navigationIcon = {
+                    IconButton(onClick = onBack) {
+                        Icon(Icons.AutoMirrored.Filled.ArrowBack, contentDescription = "Back", tint = MaterialTheme.colorScheme.onSurface)
+                    }
+                },
+                colors = TopAppBarDefaults.topAppBarColors(containerColor = MaterialTheme.colorScheme.background)
+            )
+        },
+        containerColor = MaterialTheme.colorScheme.background
+    ) { padding ->
+        Column(
+            modifier = Modifier
+                .fillMaxSize()
+                .padding(padding)
+                .verticalScroll(rememberScrollState())
+        ) {
+            Spacer(Modifier.height(8.dp))
+            SettingsSectionHeader("Theme")
+            SettingsCard {
+                Column(modifier = Modifier.fillMaxWidth().padding(16.dp)) {
+                    Row(
+                        modifier = Modifier.fillMaxWidth(),
+                        verticalAlignment = Alignment.CenterVertically,
+                        horizontalArrangement = Arrangement.SpaceBetween
+                    ) {
+                        Column(modifier = Modifier.weight(1f)) {
+                            Text("Material 3 Color", color = MaterialTheme.colorScheme.onSurface, style = MaterialTheme.typography.bodyLarge)
+                            Text(
+                                "Use wallpaper-based dynamic colors from your device theme.",
+                                color = MaterialTheme.colorScheme.onSurfaceVariant,
+                                style = MaterialTheme.typography.bodySmall
+                            )
+                        }
+                        Switch(
+                            checked = useMaterial3Color,
+                            onCheckedChange = { viewModel.setMaterial3Color(it) },
+                            colors = SwitchDefaults.colors(
+                                checkedThumbColor = MaterialTheme.colorScheme.onSurface,
+                                checkedTrackColor = MaterialTheme.colorScheme.primary,
+                                uncheckedThumbColor = MaterialTheme.colorScheme.onSurfaceVariant,
+                                uncheckedTrackColor = MaterialTheme.colorScheme.surfaceVariant
+                            )
+                        )
+                    }
+                    Spacer(Modifier.height(16.dp))
+                    SettingsDivider()
+                    Spacer(Modifier.height(16.dp))
+                    Row(
+                        modifier = Modifier.fillMaxWidth(),
+                        verticalAlignment = Alignment.CenterVertically,
+                        horizontalArrangement = Arrangement.SpaceBetween
+                    ) {
+                        Column(modifier = Modifier.weight(1f)) {
+                            Text("Monochrome", color = MaterialTheme.colorScheme.onSurface, style = MaterialTheme.typography.bodyLarge)
+                            Text(
+                                "Grayscale theme without any accent colors.",
+                                color = MaterialTheme.colorScheme.onSurfaceVariant,
+                                style = MaterialTheme.typography.bodySmall
+                            )
+                        }
+                        Switch(
+                            checked = monochromeTheme,
+                            onCheckedChange = { viewModel.setMonochromeTheme(it) },
+                            colors = SwitchDefaults.colors(
+                                checkedThumbColor = MaterialTheme.colorScheme.onSurface,
+                                checkedTrackColor = MaterialTheme.colorScheme.primary,
+                                uncheckedThumbColor = MaterialTheme.colorScheme.onSurfaceVariant,
+                                uncheckedTrackColor = MaterialTheme.colorScheme.surfaceVariant
+                            )
+                        )
+                    }
                 }
             }
 
@@ -601,16 +697,16 @@ private fun UpdatesAboutScreen(viewModel: MainViewModel, onBack: () -> Unit) {
     Scaffold(
         topBar = {
             TopAppBar(
-                title = { Text("Updates & About", color = SilverLight) },
+                title = { Text("Updates & About", color = MaterialTheme.colorScheme.onSurface) },
                 navigationIcon = {
                     IconButton(onClick = onBack) {
-                        Icon(Icons.AutoMirrored.Filled.ArrowBack, contentDescription = "Back", tint = SilverLight)
+                        Icon(Icons.AutoMirrored.Filled.ArrowBack, contentDescription = "Back", tint = MaterialTheme.colorScheme.onSurface)
                     }
                 },
-                colors = TopAppBarDefaults.topAppBarColors(containerColor = DarkBackground)
+                colors = TopAppBarDefaults.topAppBarColors(containerColor = MaterialTheme.colorScheme.background)
             )
         },
-        containerColor = DarkBackground
+        containerColor = MaterialTheme.colorScheme.background
     ) { padding ->
         Column(
             modifier = Modifier
@@ -627,15 +723,15 @@ private fun UpdatesAboutScreen(viewModel: MainViewModel, onBack: () -> Unit) {
                         verticalAlignment = Alignment.CenterVertically,
                         horizontalArrangement = Arrangement.SpaceBetween
                     ) {
-                        Text("Check for Updates on Start", color = SilverLight, style = MaterialTheme.typography.bodyLarge)
+                        Text("Check for Updates on Start", color = MaterialTheme.colorScheme.onSurface, style = MaterialTheme.typography.bodyLarge)
                         Switch(
                             checked = checkUpdatesOnStart,
                             onCheckedChange = { viewModel.setCheckUpdatesOnStart(it) },
                             colors = SwitchDefaults.colors(
-                                checkedThumbColor = SilverLight,
-                                checkedTrackColor = BlueAccent,
-                                uncheckedThumbColor = SilverDark,
-                                uncheckedTrackColor = DarkSurfaceVariant
+                                checkedThumbColor = MaterialTheme.colorScheme.onSurface,
+                                checkedTrackColor = MaterialTheme.colorScheme.primary,
+                                uncheckedThumbColor = MaterialTheme.colorScheme.onSurfaceVariant,
+                                uncheckedTrackColor = MaterialTheme.colorScheme.surfaceVariant
                             )
                         )
                     }
@@ -653,9 +749,9 @@ private fun UpdatesAboutScreen(viewModel: MainViewModel, onBack: () -> Unit) {
                     icon = Icons.Default.Info,
                     title = "Oni Manga Reader",
                     subtitle = "Version ${BuildConfig.VERSION_NAME}",
-                    tint = BlueAccent,
+                    tint = MaterialTheme.colorScheme.primary,
                     trailing = {
-                        Icon(Icons.AutoMirrored.Filled.ArrowForwardIos, contentDescription = null, tint = SilverDark, modifier = Modifier.size(16.dp))
+                        Icon(Icons.AutoMirrored.Filled.ArrowForwardIos, contentDescription = null, tint = MaterialTheme.colorScheme.onSurfaceVariant, modifier = Modifier.size(16.dp))
                     },
                     onClick = { showGitHubDialog = true }
                 )
@@ -668,10 +764,10 @@ private fun UpdatesAboutScreen(viewModel: MainViewModel, onBack: () -> Unit) {
     if (showGitHubDialog) {
         AlertDialog(
             onDismissRequest = { showGitHubDialog = false },
-            containerColor = DarkCard,
+            containerColor = MaterialTheme.colorScheme.surfaceContainerLow,
             shape = RoundedCornerShape(20.dp),
-            title = { Text("Open GitHub", color = SilverLight, fontWeight = FontWeight.Bold) },
-            text = { Text("Open the GitHub page for Oni Manga Reader?", color = SilverDark) },
+            title = { Text("Open GitHub", color = MaterialTheme.colorScheme.onSurface, fontWeight = FontWeight.Bold) },
+            text = { Text("Open the GitHub page for Oni Manga Reader?", color = MaterialTheme.colorScheme.onSurfaceVariant) },
             confirmButton = {
                 Button(
                     onClick = {
@@ -679,13 +775,13 @@ private fun UpdatesAboutScreen(viewModel: MainViewModel, onBack: () -> Unit) {
                         val intent = Intent(Intent.ACTION_VIEW, Uri.parse(githubUrl))
                         context.startActivity(intent)
                     },
-                    colors = ButtonDefaults.buttonColors(containerColor = BlueAccent),
+                    colors = ButtonDefaults.buttonColors(containerColor = MaterialTheme.colorScheme.primary),
                     shape = RoundedCornerShape(12.dp)
                 ) { Text("Open") }
             },
             dismissButton = {
                 TextButton(onClick = { showGitHubDialog = false }) {
-                    Text("Cancel", color = SilverDark)
+                    Text("Cancel", color = MaterialTheme.colorScheme.onSurfaceVariant)
                 }
             }
         )
@@ -707,16 +803,16 @@ private fun ExtensionsScreen(viewModel: MainViewModel, onBack: () -> Unit) {
     Scaffold(
         topBar = {
             TopAppBar(
-                title = { Text("Extensions", color = SilverLight) },
+                title = { Text("Extensions", color = MaterialTheme.colorScheme.onSurface) },
                 navigationIcon = {
                     IconButton(onClick = onBack) {
-                        Icon(Icons.AutoMirrored.Filled.ArrowBack, contentDescription = "Back", tint = SilverLight)
+                        Icon(Icons.AutoMirrored.Filled.ArrowBack, contentDescription = "Back", tint = MaterialTheme.colorScheme.onSurface)
                     }
                 },
-                colors = TopAppBarDefaults.topAppBarColors(containerColor = DarkBackground)
+                colors = TopAppBarDefaults.topAppBarColors(containerColor = MaterialTheme.colorScheme.background)
             )
         },
-        containerColor = DarkBackground
+        containerColor = MaterialTheme.colorScheme.background
     ) { padding ->
         Column(
             modifier = Modifier
@@ -739,9 +835,9 @@ private fun ExtensionsScreen(viewModel: MainViewModel, onBack: () -> Unit) {
                             else -> "${extensions.size} extension(s) found"
                         }
                     },
-                    tint = BlueAccent,
+                    tint = MaterialTheme.colorScheme.primary,
                     trailing = {
-                        Icon(Icons.AutoMirrored.Filled.ArrowForwardIos, contentDescription = null, tint = SilverDark, modifier = Modifier.size(16.dp))
+                        Icon(Icons.AutoMirrored.Filled.ArrowForwardIos, contentDescription = null, tint = MaterialTheme.colorScheme.onSurfaceVariant, modifier = Modifier.size(16.dp))
                     },
                     onClick = {
                         viewModel.discoverExtensions()
@@ -757,21 +853,21 @@ private fun ExtensionsScreen(viewModel: MainViewModel, onBack: () -> Unit) {
     if (showExtensionsDialog) {
         AlertDialog(
             onDismissRequest = { showExtensionsDialog = false },
-            containerColor = DarkCard,
+            containerColor = MaterialTheme.colorScheme.surfaceContainerLow,
             shape = RoundedCornerShape(20.dp),
-            title = { Text("Installed Extensions", color = SilverLight, fontWeight = FontWeight.Bold) },
+            title = { Text("Installed Extensions", color = MaterialTheme.colorScheme.onSurface, fontWeight = FontWeight.Bold) },
             text = {
                 Column {
                     if (extensions.isEmpty()) {
-                        Text("No manga extensions installed.", color = SilverDark, style = MaterialTheme.typography.bodyMedium)
+                        Text("No manga extensions installed.", color = MaterialTheme.colorScheme.onSurfaceVariant, style = MaterialTheme.typography.bodyMedium)
                         Spacer(Modifier.height(12.dp))
                         Text(
                             "Install an extension APK whose app label starts with \"Oni: \".",
-                            color = SilverDark,
+                            color = MaterialTheme.colorScheme.onSurfaceVariant,
                             style = MaterialTheme.typography.bodySmall
                         )
                     } else {
-                        Text("Tap an extension to select it:", color = SilverDark, style = MaterialTheme.typography.bodySmall)
+                        Text("Tap an extension to select it:", color = MaterialTheme.colorScheme.onSurfaceVariant, style = MaterialTheme.typography.bodySmall)
                         Spacer(Modifier.height(8.dp))
                         extensions.forEachIndexed { index, ext ->
                             val isSelected = ext.authority == selectedExtensionAuthority
@@ -790,20 +886,20 @@ private fun ExtensionsScreen(viewModel: MainViewModel, onBack: () -> Unit) {
                                     modifier = Modifier
                                         .size(40.dp)
                                         .clip(RoundedCornerShape(12.dp))
-                                        .background(if (isSelected) BlueAccent.copy(alpha = 0.25f) else BlueAccent.copy(alpha = 0.15f)),
+                                        .background(if (isSelected) MaterialTheme.colorScheme.primary.copy(alpha = 0.25f) else MaterialTheme.colorScheme.primary.copy(alpha = 0.15f)),
                                     contentAlignment = Alignment.Center
                                 ) {
                                     Icon(
                                         if (isSelected) Icons.Default.CheckCircle else Icons.Default.Widgets,
                                         contentDescription = null,
-                                        tint = if (isSelected) Color(0xFF10B981) else BlueAccent,
+                                        tint = if (isSelected) Color(0xFF10B981) else MaterialTheme.colorScheme.primary,
                                         modifier = Modifier.size(22.dp)
                                     )
                                 }
                                 Spacer(Modifier.width(12.dp))
                                 Column(modifier = Modifier.weight(1f)) {
-                                    Text(ext.label, color = if (isSelected) Color(0xFF10B981) else SilverLight, style = MaterialTheme.typography.bodyMedium)
-                                    Text(ext.packageName, color = SilverDark, style = MaterialTheme.typography.bodySmall)
+                                    Text(ext.label, color = if (isSelected) Color(0xFF10B981) else MaterialTheme.colorScheme.onSurface, style = MaterialTheme.typography.bodyMedium)
+                                    Text(ext.packageName, color = MaterialTheme.colorScheme.onSurfaceVariant, style = MaterialTheme.typography.bodySmall)
                                 }
                                 if (isSelected) {
                                     Text("Active", color = Color(0xFF10B981), style = MaterialTheme.typography.labelSmall, fontWeight = FontWeight.Bold)
@@ -819,7 +915,7 @@ private fun ExtensionsScreen(viewModel: MainViewModel, onBack: () -> Unit) {
                                 onClick = { viewModel.selectExtension(null); showExtensionsDialog = false },
                                 modifier = Modifier.fillMaxWidth()
                             ) {
-                                Text("Clear selection", color = StatusDropped)
+                                Text("Clear selection", color = MaterialTheme.colorScheme.error)
                             }
                         }
                     }
@@ -827,7 +923,7 @@ private fun ExtensionsScreen(viewModel: MainViewModel, onBack: () -> Unit) {
             },
             confirmButton = {
                 TextButton(onClick = { showExtensionsDialog = false }) {
-                    Text("Close", color = BlueAccent)
+                    Text("Close", color = MaterialTheme.colorScheme.primary)
                 }
             }
         )
@@ -839,31 +935,31 @@ private fun UpdateStatusSection(state: UpdateUiState, viewModel: UpdateViewModel
     when {
         state.isChecking -> {
             Row(verticalAlignment = Alignment.CenterVertically) {
-                CircularProgressIndicator(modifier = Modifier.size(18.dp), color = BlueAccent, strokeWidth = 2.dp)
+                CircularProgressIndicator(modifier = Modifier.size(18.dp), color = MaterialTheme.colorScheme.primary, strokeWidth = 2.dp)
                 Spacer(Modifier.width(10.dp))
-                Text("Checking for updates...", color = SilverDark, style = MaterialTheme.typography.bodySmall)
+                Text("Checking for updates...", color = MaterialTheme.colorScheme.onSurfaceVariant, style = MaterialTheme.typography.bodySmall)
             }
         }
         state.isDownloading -> {
             Row(verticalAlignment = Alignment.CenterVertically) {
-                CircularProgressIndicator(modifier = Modifier.size(18.dp), color = BlueAccent, strokeWidth = 2.dp)
+                CircularProgressIndicator(modifier = Modifier.size(18.dp), color = MaterialTheme.colorScheme.primary, strokeWidth = 2.dp)
                 Spacer(Modifier.width(10.dp))
-                Text("Downloading update...", color = SilverDark, style = MaterialTheme.typography.bodySmall)
+                Text("Downloading update...", color = MaterialTheme.colorScheme.onSurfaceVariant, style = MaterialTheme.typography.bodySmall)
             }
         }
         state.downloadedFile != null -> {
             Row(verticalAlignment = Alignment.CenterVertically) {
                 Icon(Icons.Default.CheckCircle, contentDescription = null, tint = Color(0xFF10B981), modifier = Modifier.size(18.dp))
                 Spacer(Modifier.width(10.dp))
-                Text("Download complete", color = SilverDark, style = MaterialTheme.typography.bodySmall)
+                Text("Download complete", color = MaterialTheme.colorScheme.onSurfaceVariant, style = MaterialTheme.typography.bodySmall)
             }
         }
         state.error != null -> {
             Spacer(Modifier.height(8.dp))
             Row(verticalAlignment = Alignment.CenterVertically) {
-                Icon(Icons.Default.Error, contentDescription = null, tint = StatusDropped, modifier = Modifier.size(16.dp))
+                Icon(Icons.Default.Error, contentDescription = null, tint = MaterialTheme.colorScheme.error, modifier = Modifier.size(16.dp))
                 Spacer(Modifier.width(8.dp))
-                Text("${state.error}", color = StatusDropped, style = MaterialTheme.typography.bodySmall)
+                Text("${state.error}", color = MaterialTheme.colorScheme.error, style = MaterialTheme.typography.bodySmall)
             }
         }
         state.release != null -> {
@@ -880,14 +976,14 @@ private fun UpdateStatusSection(state: UpdateUiState, viewModel: UpdateViewModel
             }
             if (cmp > 0) {
                 Row(verticalAlignment = Alignment.CenterVertically) {
-                    Icon(Icons.Default.Update, contentDescription = null, tint = BlueLight, modifier = Modifier.size(18.dp))
+                    Icon(Icons.Default.Update, contentDescription = null, tint = MaterialTheme.colorScheme.primaryContainer, modifier = Modifier.size(18.dp))
                     Spacer(Modifier.width(8.dp))
-                    Text("${state.release.tagName} available", color = BlueLight, style = MaterialTheme.typography.bodySmall, fontWeight = FontWeight.Medium)
+                    Text("${state.release.tagName} available", color = MaterialTheme.colorScheme.primaryContainer, style = MaterialTheme.typography.bodySmall, fontWeight = FontWeight.Medium)
                 }
                 Spacer(Modifier.height(10.dp))
                 Button(
                     onClick = { viewModel.downloadUpdate() },
-                    colors = ButtonDefaults.buttonColors(containerColor = BlueAccent),
+                    colors = ButtonDefaults.buttonColors(containerColor = MaterialTheme.colorScheme.primary),
                     shape = RoundedCornerShape(12.dp)
                 ) {
                     Icon(Icons.Default.Download, contentDescription = null, modifier = Modifier.size(16.dp))
@@ -898,17 +994,17 @@ private fun UpdateStatusSection(state: UpdateUiState, viewModel: UpdateViewModel
                 Row(verticalAlignment = Alignment.CenterVertically) {
                     Icon(Icons.Default.CheckCircle, contentDescription = null, tint = Color(0xFF10B981), modifier = Modifier.size(16.dp))
                     Spacer(Modifier.width(8.dp))
-                    Text("Up to date (v$currentVersion)", color = SilverDark, style = MaterialTheme.typography.bodySmall)
+                    Text("Up to date (v$currentVersion)", color = MaterialTheme.colorScheme.onSurfaceVariant, style = MaterialTheme.typography.bodySmall)
                 }
             }
         }
         else -> {
             Button(
                 onClick = { viewModel.checkForUpdates() },
-                colors = ButtonDefaults.buttonColors(containerColor = DarkElevated),
+                colors = ButtonDefaults.buttonColors(containerColor = MaterialTheme.colorScheme.surfaceContainerHigh),
                 shape = RoundedCornerShape(12.dp)
             ) {
-                Text("Check for Updates", color = SilverLight)
+                Text("Check for Updates", color = MaterialTheme.colorScheme.onSurface)
             }
         }
     }
@@ -918,7 +1014,7 @@ private fun UpdateStatusSection(state: UpdateUiState, viewModel: UpdateViewModel
 fun SettingsSectionHeader(title: String) {
     Text(
         text = title,
-        color = BlueAccent,
+        color = MaterialTheme.colorScheme.primary,
         style = MaterialTheme.typography.titleSmall,
         fontWeight = FontWeight.SemiBold,
         letterSpacing = 1.sp,
@@ -933,7 +1029,7 @@ fun SettingsCard(content: @Composable () -> Unit) {
             .fillMaxWidth()
             .padding(horizontal = 16.dp),
         shape = RoundedCornerShape(16.dp),
-        colors = CardDefaults.cardColors(containerColor = DarkCard),
+        colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.surfaceContainerLow),
         elevation = CardDefaults.cardElevation(defaultElevation = 0.dp)
     ) {
         content()
@@ -945,10 +1041,11 @@ fun SettingsNavItem(
     icon: ImageVector,
     title: String,
     subtitle: String,
-    tint: Color = BlueAccent,
+    tint: Color = Color.Unspecified,
     trailing: @Composable () -> Unit = {},
     onClick: () -> Unit
 ) {
+    val resolvedTint = if (tint == Color.Unspecified) MaterialTheme.colorScheme.primary else tint
     Row(
         modifier = Modifier
             .fillMaxWidth()
@@ -960,15 +1057,15 @@ fun SettingsNavItem(
             modifier = Modifier
                 .size(40.dp)
                 .clip(RoundedCornerShape(12.dp))
-                .background(tint.copy(alpha = 0.15f)),
+                .background(resolvedTint.copy(alpha = 0.15f)),
             contentAlignment = Alignment.Center
         ) {
-            Icon(icon, contentDescription = null, tint = tint, modifier = Modifier.size(22.dp))
+            Icon(icon, contentDescription = null, tint = resolvedTint, modifier = Modifier.size(22.dp))
         }
         Spacer(Modifier.width(14.dp))
         Column(modifier = Modifier.weight(1f)) {
-            Text(title, color = SilverLight, style = MaterialTheme.typography.bodyLarge)
-            Text(subtitle, color = SilverDark, style = MaterialTheme.typography.bodySmall)
+            Text(title, color = MaterialTheme.colorScheme.onSurface, style = MaterialTheme.typography.bodyLarge)
+            Text(subtitle, color = MaterialTheme.colorScheme.onSurfaceVariant, style = MaterialTheme.typography.bodySmall)
         }
         trailing()
     }
@@ -978,6 +1075,6 @@ fun SettingsNavItem(
 fun SettingsDivider() {
     HorizontalDivider(
         modifier = Modifier.padding(horizontal = 16.dp),
-        color = GlassStroke
+        color = MaterialTheme.colorScheme.outlineVariant
     )
 }

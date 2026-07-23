@@ -251,7 +251,7 @@ fun SearchScreen(
                             .focusRequester(focusRequester),
                         singleLine = true,
                         textStyle = TextStyle(color = Color.White, fontSize = 16.sp),
-                        cursorBrush = SolidColor(Color(0xFF3B82F6)),
+                        cursorBrush = SolidColor(MaterialTheme.colorScheme.primary),
                         keyboardOptions = KeyboardOptions(imeAction = ImeAction.Search),
                         keyboardActions = KeyboardActions(onSearch = { keyboardController?.hide(); performSearch() }),
                         decorationBox = { innerTextField ->
@@ -289,12 +289,12 @@ fun SearchScreen(
                         .padding(vertical = 4.dp),
                     verticalAlignment = Alignment.CenterVertically
                 ) {
-                    Icon(Icons.Default.FilterList, contentDescription = null, tint = Color(0xFF3B82F6), modifier = Modifier.size(18.dp))
+                    Icon(Icons.Default.FilterList, contentDescription = null, tint = MaterialTheme.colorScheme.primary, modifier = Modifier.size(18.dp))
                     Spacer(modifier = Modifier.width(6.dp))
                     Text("Filters", color = Color.White.copy(alpha = 0.7f), style = MaterialTheme.typography.titleSmall)
                     if (activeFilterCount > 0) {
                         Spacer(modifier = Modifier.width(6.dp))
-                        Surface(shape = RoundedCornerShape(10.dp), color = Color(0xFF3B82F6)) {
+                        Surface(shape = RoundedCornerShape(10.dp), color = MaterialTheme.colorScheme.primary) {
                             Text("$activeFilterCount", color = Color.White, style = MaterialTheme.typography.labelSmall, modifier = Modifier.padding(horizontal = 8.dp, vertical = 2.dp))
                         }
                     }
@@ -309,14 +309,14 @@ fun SearchScreen(
                 Row {
                     if (activeFilterCount > 0) {
                         TextButton(onClick = { clearAllFilters() }, modifier = Modifier.height(32.dp)) {
-                            Text("Reset", color = Color(0xFF3B82F6), style = MaterialTheme.typography.labelSmall)
+                            Text("Reset", color = MaterialTheme.colorScheme.primary, style = MaterialTheme.typography.labelSmall)
                         }
                     }
                     Button(
                         onClick = { keyboardController?.hide(); performSearch() },
                         modifier = Modifier.height(34.dp),
                         shape = RoundedCornerShape(10.dp),
-                        colors = ButtonDefaults.buttonColors(containerColor = Color(0xFF3B82F6)),
+                        colors = ButtonDefaults.buttonColors(containerColor = MaterialTheme.colorScheme.primary),
                         contentPadding = PaddingValues(horizontal = 16.dp, vertical = 4.dp),
                         enabled = filters.query.isNotBlank() || activeFilterCount > 0
                     ) {
@@ -376,7 +376,7 @@ fun SearchScreen(
 
             if (isSearching) {
                 Box(modifier = Modifier.fillMaxSize().padding(top = 128.dp), contentAlignment = Alignment.TopCenter) {
-                    CircularProgressIndicator(color = Color(0xFF3B82F6))
+                    CircularProgressIndicator(color = MaterialTheme.colorScheme.primary)
                 }
             } else if (hasSearched && results.isEmpty()) {
                 Box(modifier = Modifier.fillMaxSize(), contentAlignment = Alignment.TopCenter) {
@@ -418,12 +418,12 @@ fun SearchScreen(
                         item {
                             Box(modifier = Modifier.fillMaxWidth().padding(16.dp), contentAlignment = Alignment.Center) {
                                 if (isLoadingMore) {
-                                    CircularProgressIndicator(modifier = Modifier.size(24.dp), strokeWidth = 2.dp, color = Color(0xFF3B82F6))
+                                    CircularProgressIndicator(modifier = Modifier.size(24.dp), strokeWidth = 2.dp, color = MaterialTheme.colorScheme.primary)
                                 } else {
                                     TextButton(onClick = { performSearch(currentPage + 1) }) {
-                                        Text("Load More", color = Color(0xFF3B82F6))
+                                        Text("Load More", color = MaterialTheme.colorScheme.primary)
                                         Spacer(modifier = Modifier.width(4.dp))
-                                        Icon(Icons.AutoMirrored.Filled.ArrowForward, contentDescription = null, tint = Color(0xFF3B82F6), modifier = Modifier.size(16.dp))
+                                        Icon(Icons.AutoMirrored.Filled.ArrowForward, contentDescription = null, tint = MaterialTheme.colorScheme.primary, modifier = Modifier.size(16.dp))
                                     }
                                 }
                             }
@@ -546,7 +546,7 @@ private fun FilterRow(
         ) {
             Text(label, color = Color.White.copy(alpha = 0.7f), style = MaterialTheme.typography.bodyMedium, modifier = Modifier.weight(1f))
             if (count > 0) {
-                Surface(shape = RoundedCornerShape(10.dp), color = Color(0xFF3B82F6)) {
+                Surface(shape = RoundedCornerShape(10.dp), color = MaterialTheme.colorScheme.primary) {
                     Text("$count", color = Color.White, style = MaterialTheme.typography.labelSmall, modifier = Modifier.padding(horizontal = 8.dp, vertical = 2.dp))
                 }
                 Spacer(modifier = Modifier.width(8.dp))
@@ -598,7 +598,7 @@ private fun MultiSelectSheet(
                         .padding(horizontal = 12.dp),
                     singleLine = true,
                     textStyle = TextStyle(color = Color.White, fontSize = 14.sp),
-                    cursorBrush = SolidColor(Color(0xFF3B82F6)),
+                    cursorBrush = SolidColor(MaterialTheme.colorScheme.primary),
                     decorationBox = { innerTextField ->
                         Box(contentAlignment = Alignment.CenterStart) {
                             if (searchQuery.isEmpty()) Text("Search...", color = Color.White.copy(alpha = 0.3f), fontSize = 14.sp)
@@ -630,13 +630,13 @@ private fun MultiSelectSheet(
                                     label = { Text(option, style = MaterialTheme.typography.labelSmall) },
                                     colors = FilterChipDefaults.filterChipColors(
                                         containerColor = Color(0xFF2A2A2A),
-                                        selectedContainerColor = Color(0xFF3B82F6).copy(alpha = 0.25f),
+                                        selectedContainerColor = MaterialTheme.colorScheme.primary.copy(alpha = 0.25f),
                                         labelColor = Color.White.copy(alpha = 0.7f),
-                                        selectedLabelColor = Color(0xFF3B82F6)
+                                        selectedLabelColor = MaterialTheme.colorScheme.primary
                                     ),
                                     border = FilterChipDefaults.filterChipBorder(
                                         borderColor = Color.Transparent,
-                                        selectedBorderColor = Color(0xFF3B82F6).copy(alpha = 0.5f),
+                                        selectedBorderColor = MaterialTheme.colorScheme.primary.copy(alpha = 0.5f),
                                         enabled = true,
                                         selected = option in selected
                                     )
