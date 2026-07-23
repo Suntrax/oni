@@ -113,6 +113,13 @@ fun OniApp(viewModel: MainViewModel) {
     }
     val keyboardController = LocalSoftwareKeyboardController.current
 
+    LaunchedEffect(currentNavRoute) {
+        showSearch = false
+    }
+    LaunchedEffect(currentScreenType) {
+        if (currentScreenType != null) showSearch = false
+    }
+
     LaunchedEffect(lockRotation) {
         val activity = context as? MainActivity ?: return@LaunchedEffect
         activity.requestedOrientation = if (lockRotation) {
@@ -137,7 +144,11 @@ fun OniApp(viewModel: MainViewModel) {
                         viewModel.selectManga(manga)
                         currentScreenType = "detail"
                     },
-                    onSearchClick = { showSearch = true }
+                    onSearchClick = { showSearch = true },
+                    onReadNow = { manga ->
+                        viewModel.selectManga(manga)
+                        currentScreenType = "detail"
+                    }
                 )
                 "home" -> HomeScreen(
                     viewModel = viewModel,
@@ -158,7 +169,14 @@ fun OniApp(viewModel: MainViewModel) {
                     onRemoveResumeTracking = { track ->
                         viewModel.clearResumeProgress(track.mangaId)
                     },
-                    onSearchClick = { showSearch = true }
+                    onSearchClick = { showSearch = true },
+                    onLoginClick = {
+                        val intent = android.content.Intent(
+                            android.content.Intent.ACTION_VIEW,
+                            android.net.Uri.parse(viewModel.getAnilistAuthUrl())
+                        )
+                        context.startActivity(intent)
+                    }
                 )
                 "downloads" -> DownloadsScreen()
                 "settings" -> SettingsScreen(viewModel = viewModel)
@@ -173,6 +191,7 @@ fun OniApp(viewModel: MainViewModel) {
                     currentScreenType = "detail"
                     showSearch = false
                 },
+                onDismiss = { showSearch = false },
                 isActive = showSearch
             )
         }

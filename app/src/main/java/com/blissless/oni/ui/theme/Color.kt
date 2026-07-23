@@ -16,11 +16,21 @@ val DarkSurfaceVariant = Color(0xFF1E1E1E)
 val DarkElevated = Color(0xFF282828)
 val DarkCard = Color(0xFF1A1A1E)
 
-val StatusWatching = BlueAccent
-val StatusPlanning = Color(0xFF8B5CF6)
-val StatusCompleted = Color(0xFF10B981)
-val StatusPaused = Color(0xFFF59E0B)
-val StatusDropped = Color(0xFFEF4444)
+val StatusWatching = Color(0xFF60A5FA)
+val StatusPlanning = Color(0xFFC084FC)
+val StatusCompleted = Color(0xFF34D399)
+val StatusPaused = Color(0xFFFBBF24)
+val StatusDropped = Color(0xFFF87171)
+
+val StatusColors = mapOf(
+    "CURRENT" to StatusWatching,
+    "READING" to StatusWatching,
+    "PLANNING" to StatusPlanning,
+    "COMPLETED" to StatusCompleted,
+    "PAUSED" to StatusPaused,
+    "ON_HOLD" to StatusPaused,
+    "DROPPED" to StatusDropped
+)
 
 val GlassWhite = Color(0x0DFFFFFF)
 val GlassStroke = Color(0x1AFFFFFF)

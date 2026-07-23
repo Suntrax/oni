@@ -112,9 +112,7 @@ import com.blissless.oni.ui.theme.GradientBlue
 import com.blissless.oni.ui.theme.GradientPurple
 import com.blissless.oni.ui.theme.GradientTeal
 import com.blissless.oni.ui.theme.ReadGreen
-import com.blissless.oni.ui.theme.StatusCompleted
-import com.blissless.oni.ui.theme.StatusPaused
-import com.blissless.oni.ui.theme.StatusPlanning
+import com.blissless.oni.ui.theme.StatusColors
 import com.blissless.oni.viewmodel.MainViewModel
 import com.blissless.oni.viewmodel.UiState
 
@@ -144,6 +142,7 @@ fun MangaDetailScreen(
         mutableStateOf(detail?.coverExtraLarge?.takeIf { it.isNotBlank() } ?: detail?.coverLarge?.takeIf { it.isNotBlank() } ?: viewModel.getCurrentMangaCoverUrl())
     }
     var showStatusMenu by remember { mutableStateOf(false) }
+    var showStatusDialog by remember { mutableStateOf(false) }
     var showChapterDialog by remember { mutableStateOf(false) }
     var isContinueReading by remember { mutableStateOf(false) }
     val selectedExtensionAuthority by viewModel.selectedExtensionAuthority.collectAsState()
@@ -234,6 +233,7 @@ fun MangaDetailScreen(
                         onStatusMenuToggle = { showStatusMenu = it },
                         showChapterDialog = showChapterDialog,
                         onChapterDialogToggle = { showChapterDialog = it },
+                        onStatusDialogShow = { showStatusDialog = true },
                         onStartReading = {
                             if (selectedExtensionAuthority == null) {
                                 Toast.makeText(context, "Select a default extension in Settings first", Toast.LENGTH_SHORT).show()
@@ -262,6 +262,39 @@ fun MangaDetailScreen(
                             currentStatus = null
                         }
                     )
+
+                    if (showStatusDialog) {
+                        MangaStatusDialog(
+                            title = detail.titleRomaji,
+                            coverUrl = detail.coverExtraLarge ?: detail.coverLarge ?: fallbackCoverUrl,
+                            currentStatus = currentStatus?.let { status ->
+                                when (status) {
+                                    ReadingStatus.READING -> "CURRENT"
+                                    ReadingStatus.PLANNING -> "PLANNING"
+                                    ReadingStatus.COMPLETED -> "COMPLETED"
+                                    ReadingStatus.ON_HOLD -> "PAUSED"
+                                    ReadingStatus.DROPPED -> "DROPPED"
+                                    else -> ""
+                                }
+                            } ?: "",
+                            currentChapterNumber = currentChapter,
+                            totalChapters = detail.chapters ?: 0,
+                            onDismiss = { showStatusDialog = false },
+                            onRemove = {
+                                viewModel.removeFromAnilist("anilist_${detail.id}")
+                                currentStatus = null
+                                showStatusDialog = false
+                            },
+                            onUpdate = { status, progress ->
+                                viewModel.updateTrackingStatus("anilist_${detail.id}", status)
+                                currentStatus = status
+                                if (progress != null) {
+                                    currentChapter = progress
+                                }
+                                showStatusDialog = false
+                            }
+                        )
+                    }
 
                     if (!detail.description.isNullOrBlank()) {
                         Spacer(modifier = Modifier.height(24.dp))
@@ -686,6 +719,7 @@ private fun ActionButtonsCard(
     onStatusMenuToggle: (Boolean) -> Unit,
     showChapterDialog: Boolean,
     onChapterDialogToggle: (Boolean) -> Unit,
+    onStatusDialogShow: () -> Unit = {},
     onStartReading: () -> Unit,
     onOpenChapterSelect: () -> Unit,
     onStatusChange: (ReadingStatus) -> Unit,
@@ -729,10 +763,54 @@ private fun ActionButtonsCard(
                 horizontalArrangement = Arrangement.spacedBy(10.dp)
             ) {
                 Box(modifier = Modifier.weight(1f)) {
-                    StatusButton(currentStatus, showStatusMenu, onStatusMenuToggle, onStatusChange, onRemoveAnilist)
+                    Row(
+                        modifier = Modifier
+                            .fillMaxWidth()
+                            .height(44.dp)
+                            .clip(RoundedCornerShape(12.dp))
+                            .background(MaterialTheme.colorScheme.surfaceVariant.copy(alpha = 0.5f))
+                            .clickable(onClick = onStatusDialogShow),
+                        horizontalArrangement = Arrangement.Center,
+                        verticalAlignment = Alignment.CenterVertically
+                    ) {
+                        Icon(
+                            when (currentStatus) {
+                                ReadingStatus.READING -> Icons.Default.Bookmark
+                                ReadingStatus.PLANNING -> Icons.Default.CalendarMonth
+                                else -> Icons.Default.BookmarkBorder
+                            },
+                            contentDescription = null,
+                            modifier = Modifier.size(18.dp),
+                            tint = when (currentStatus) {
+                                ReadingStatus.READING -> StatusColors["READING"] ?: MaterialTheme.colorScheme.primary
+                                ReadingStatus.PLANNING -> StatusColors["PLANNING"] ?: MaterialTheme.colorScheme.primary
+                                ReadingStatus.COMPLETED -> StatusColors["COMPLETED"] ?: MaterialTheme.colorScheme.primary
+                                else -> MaterialTheme.colorScheme.onSurfaceVariant
+                            }
+                        )
+                        Spacer(Modifier.width(6.dp))
+                        Text(
+                            text = when (currentStatus) {
+                                ReadingStatus.READING -> "Reading"
+                                ReadingStatus.PLANNING -> "Planned"
+                                ReadingStatus.COMPLETED -> "Completed"
+                                ReadingStatus.ON_HOLD -> "Paused"
+                                ReadingStatus.DROPPED -> "Dropped"
+                                null -> "Track"
+                            },
+                            fontWeight = FontWeight.Medium,
+                            fontSize = 13.sp,
+                            color = when (currentStatus) {
+                                ReadingStatus.READING -> StatusColors["READING"] ?: MaterialTheme.colorScheme.primary
+                                ReadingStatus.PLANNING -> StatusColors["PLANNING"] ?: MaterialTheme.colorScheme.primary
+                                ReadingStatus.COMPLETED -> StatusColors["COMPLETED"] ?: MaterialTheme.colorScheme.primary
+                                else -> MaterialTheme.colorScheme.onSurface
+                            }
+                        )
+                    }
                 }
                 Box(modifier = Modifier.weight(1f)) {
-                    ProgressButton(onClick = { onChapterDialogToggle(true) })
+                    ProgressButton(onClick = onStatusDialogShow)
                 }
             }
 
@@ -785,9 +863,9 @@ private fun StatusButton(
                 contentDescription = null,
                 modifier = Modifier.size(18.dp),
                 tint = when (currentStatus) {
-                    ReadingStatus.READING -> MaterialTheme.colorScheme.primary
-                    ReadingStatus.PLANNING -> StatusPlanning
-                    ReadingStatus.COMPLETED -> StatusCompleted
+                    ReadingStatus.READING -> StatusColors["READING"] ?: MaterialTheme.colorScheme.primary
+                    ReadingStatus.PLANNING -> StatusColors["PLANNING"] ?: MaterialTheme.colorScheme.primary
+                    ReadingStatus.COMPLETED -> StatusColors["COMPLETED"] ?: MaterialTheme.colorScheme.primary
                     else -> MaterialTheme.colorScheme.onSurfaceVariant
                 }
             )
@@ -804,9 +882,9 @@ private fun StatusButton(
                 fontWeight = FontWeight.Medium,
                 fontSize = 13.sp,
                 color = when (currentStatus) {
-                    ReadingStatus.READING -> MaterialTheme.colorScheme.primary
-                    ReadingStatus.PLANNING -> StatusPlanning
-                    ReadingStatus.COMPLETED -> StatusCompleted
+                    ReadingStatus.READING -> StatusColors["READING"] ?: MaterialTheme.colorScheme.primary
+                    ReadingStatus.PLANNING -> StatusColors["PLANNING"] ?: MaterialTheme.colorScheme.primary
+                    ReadingStatus.COMPLETED -> StatusColors["COMPLETED"] ?: MaterialTheme.colorScheme.primary
                     else -> MaterialTheme.colorScheme.onSurface
                 }
             )
@@ -831,11 +909,11 @@ private fun StatusButton(
                     ReadingStatus.DROPPED -> "Dropped"
                 }
                 val statusColor = when (status) {
-                    ReadingStatus.READING -> MaterialTheme.colorScheme.primary
-                    ReadingStatus.PLANNING -> StatusPlanning
-                    ReadingStatus.COMPLETED -> StatusCompleted
-                    ReadingStatus.ON_HOLD -> StatusPaused
-                    ReadingStatus.DROPPED -> MaterialTheme.colorScheme.error
+                    ReadingStatus.READING -> StatusColors["READING"] ?: MaterialTheme.colorScheme.primary
+                    ReadingStatus.PLANNING -> StatusColors["PLANNING"] ?: MaterialTheme.colorScheme.primary
+                    ReadingStatus.COMPLETED -> StatusColors["COMPLETED"] ?: MaterialTheme.colorScheme.primary
+                    ReadingStatus.ON_HOLD -> StatusColors["PAUSED"] ?: MaterialTheme.colorScheme.primary
+                    ReadingStatus.DROPPED -> StatusColors["DROPPED"] ?: MaterialTheme.colorScheme.error
                 }
                 DropdownMenuItem(
                     text = {

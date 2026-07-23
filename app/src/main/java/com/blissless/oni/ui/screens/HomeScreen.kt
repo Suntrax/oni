@@ -1,6 +1,5 @@
 package com.blissless.oni.ui.screens
 
-import androidx.compose.foundation.BorderStroke
 import androidx.compose.foundation.background
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.Arrangement
@@ -17,23 +16,23 @@ import androidx.compose.foundation.layout.heightIn
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.layout.width
-import androidx.compose.foundation.lazy.LazyColumn
-import androidx.compose.foundation.lazy.LazyRow
-import androidx.compose.foundation.lazy.items
-import androidx.compose.foundation.lazy.itemsIndexed
+import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.shape.RoundedCornerShape
+import androidx.compose.foundation.verticalScroll
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.filled.Bookmark
 import androidx.compose.material.icons.filled.Check
 import androidx.compose.material.icons.filled.Close
+import androidx.compose.material.icons.filled.Delete
+import androidx.compose.material.icons.filled.Pause
 import androidx.compose.material.icons.filled.PlayArrow
 import androidx.compose.material.icons.filled.Search
-import androidx.compose.material.icons.filled.Star
+import androidx.compose.material3.Button
+import androidx.compose.material3.ButtonDefaults
 import androidx.compose.material3.Card
 import androidx.compose.material3.CardDefaults
 import androidx.compose.material3.Icon
-import androidx.compose.material3.IconButton
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.Surface
 import androidx.compose.material3.Text
@@ -41,6 +40,9 @@ import androidx.compose.runtime.Composable
 import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.collectAsState
 import androidx.compose.runtime.getValue
+import androidx.compose.runtime.mutableStateOf
+import androidx.compose.runtime.remember
+import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
@@ -48,26 +50,24 @@ import androidx.compose.ui.graphics.Brush
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.vector.ImageVector
 import androidx.compose.ui.layout.ContentScale
+import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.text.font.FontWeight
+import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import coil.compose.AsyncImage
+import coil.request.ImageRequest
+import com.blissless.oni.R
 import com.blissless.oni.data.MangaSearchResult
 import com.blissless.oni.data.MangaTrack
+import com.blissless.oni.data.ReadingStatus
+import com.blissless.oni.ui.components.rememberCinematicAnimation
+import com.blissless.oni.ui.theme.StatusColors
 import com.blissless.oni.viewmodel.MainViewModel
-import com.blissless.oni.ui.theme.GradientBlue
-import com.blissless.oni.ui.theme.GradientPurple
 
 private object HomeStatusColors {
-    fun getColor(status: String): Color = when (status) {
-        "CURRENT" -> Color(0xFF4CAF50)
-        "PLANNING" -> Color(0xFF5C6BC0)
-        "COMPLETED" -> Color(0xFF66BB6A)
-        "PAUSED" -> Color(0xFFFFB74D)
-        "DROPPED" -> Color(0xFFEF5350)
-        else -> Color(0xFF6750A4)
-    }
+    fun getColor(status: String): Color = StatusColors[status] ?: Color(0xFF6750A4)
 }
 
 @Composable
@@ -130,19 +130,28 @@ fun MangaHorizontalList(
     tracks: List<MangaTrack>,
     listType: String,
     onMangaClick: (MangaTrack) -> Unit,
-    onRemoveClick: ((MangaTrack) -> Unit)? = null
+    onRemoveClick: ((MangaTrack) -> Unit)? = null,
+    listIndex: Int = 0,
+    isVisible: Boolean = true
 ) {
-    LazyRow(
-        contentPadding = PaddingValues(horizontal = 16.dp),
-        horizontalArrangement = Arrangement.spacedBy(12.dp)
-    ) {
-        items(tracks, key = { "${listType}_${it.mangaId}" }) { track ->
-            MangaHomeCard(
-                track = track,
-                listType = listType,
-                onClick = { onMangaClick(track) },
-                onRemoveClick = onRemoveClick?.let { { it(track) } }
-            )
+    val cinematicProgress = rememberCinematicAnimation("home", isVisible, true)
+    val staggerDelay = listIndex * 50f
+    val effectiveProgress = ((cinematicProgress * 1000f - staggerDelay) / 1000f).coerceIn(0f, 1f)
+
+    Box(modifier = Modifier.fillMaxWidth()) {
+        androidx.compose.foundation.lazy.LazyRow(
+            contentPadding = PaddingValues(horizontal = 16.dp),
+            horizontalArrangement = Arrangement.spacedBy(12.dp)
+        ) {
+            items(tracks.size, key = { "${listType}_${tracks[it].mangaId}" }) { index ->
+                val track = tracks[index]
+                MangaHomeCard(
+                    track = track,
+                    listType = listType,
+                    onClick = { onMangaClick(track) },
+                    onRemoveClick = onRemoveClick?.let { { it(track) } }
+                )
+            }
         }
     }
 }
@@ -401,36 +410,48 @@ fun HomeScreen(
     onContinueReading: (MangaTrack) -> Unit,
     onResumeReading: (MangaTrack) -> Unit = onContinueReading,
     onRemoveResumeTracking: (MangaTrack) -> Unit = {},
-    onSearchClick: () -> Unit = {}
+    onSearchClick: () -> Unit = {},
+    onLoginClick: () -> Unit = {},
+    onMangaStatusChange: (MangaTrack, ReadingStatus, Int?) -> Unit = { _, _, _ -> }
 ) {
     val continueReading by viewModel.continueReading.collectAsState()
     val resumeReading by viewModel.resumeReading.collectAsState()
     val planningToRead by viewModel.planningToRead.collectAsState()
+    val anilistUsername by viewModel.anilistUsername.collectAsState()
+    val isLoggedIn = anilistUsername != null
+
+    var showStatusDialog by remember { mutableStateOf(false) }
+    var selectedTrack by remember { mutableStateOf<MangaTrack?>(null) }
 
     LaunchedEffect(Unit) {
         viewModel.refreshTrackingLists()
     }
 
-    LazyColumn(
+    val homeScrollState = rememberScrollState()
+    val allListsEmpty = continueReading.isEmpty() && planningToRead.isEmpty() && resumeReading.isEmpty()
+    val showWelcomeCard = !isLoggedIn && allListsEmpty
+
+    Column(
         modifier = Modifier
             .fillMaxSize()
-            .padding(top = 20.dp),
-        contentPadding = PaddingValues(bottom = 100.dp),
+            .padding(top = 20.dp)
+            .verticalScroll(homeScrollState),
         verticalArrangement = Arrangement.spacedBy(24.dp)
     ) {
-        item {
-            Row(
-                modifier = Modifier
-                    .fillMaxWidth()
-                    .padding(horizontal = 16.dp, vertical = 8.dp),
-                verticalAlignment = Alignment.CenterVertically
-            ) {
+        Row(
+            modifier = Modifier
+                .fillMaxWidth()
+                .padding(horizontal = 16.dp, vertical = 16.dp),
+            verticalAlignment = Alignment.CenterVertically
+        ) {
+            if (isLoggedIn) {
                 Surface(
                     modifier = Modifier.weight(1f),
                     shape = RoundedCornerShape(18.dp),
                     color = MaterialTheme.colorScheme.surface,
                     tonalElevation = 2.dp,
-                    shadowElevation = 1.dp
+                    shadowElevation = 1.dp,
+                    onClick = onSearchClick
                 ) {
                     Row(
                         modifier = Modifier.padding(start = 6.dp, end = 16.dp, top = 6.dp, bottom = 6.dp),
@@ -455,129 +476,254 @@ fun HomeScreen(
                         }
                     }
                 }
-                Spacer(modifier = Modifier.width(10.dp))
+            } else {
                 Surface(
-                    modifier = Modifier.height(56.dp),
+                    modifier = Modifier.weight(1f),
                     shape = RoundedCornerShape(18.dp),
                     color = MaterialTheme.colorScheme.surface,
                     tonalElevation = 2.dp,
-                    shadowElevation = 1.dp,
-                    onClick = onSearchClick
+                    shadowElevation = 1.dp
                 ) {
-                    Box(modifier = Modifier.padding(horizontal = 16.dp), contentAlignment = Alignment.Center) {
-                        Icon(Icons.Default.Search, contentDescription = "Search", tint = MaterialTheme.colorScheme.onSurfaceVariant, modifier = Modifier.size(22.dp))
+                    Row(
+                        modifier = Modifier.padding(start = 6.dp, end = 16.dp, top = 6.dp, bottom = 6.dp),
+                        verticalAlignment = Alignment.CenterVertically
+                    ) {
+                        Box(
+                            modifier = Modifier.size(44.dp).clip(CircleShape).background(MaterialTheme.colorScheme.surfaceVariant),
+                            contentAlignment = Alignment.Center
+                        ) {
+                            AsyncImage(
+                                model = R.mipmap.ic_launcher_round,
+                                contentDescription = "App",
+                                modifier = Modifier.size(36.dp).clip(CircleShape)
+                            )
+                        }
+                        Spacer(modifier = Modifier.width(12.dp))
+                        Column {
+                            Text("Oni", style = MaterialTheme.typography.titleMedium, fontWeight = FontWeight.SemiBold, color = MaterialTheme.colorScheme.onSurface)
+                            Text("${planningToRead.size + continueReading.size} manga tracked", style = MaterialTheme.typography.bodySmall, color = MaterialTheme.colorScheme.onSurfaceVariant)
+                        }
+                    }
+                }
+            }
+            Spacer(modifier = Modifier.width(10.dp))
+            Surface(
+                modifier = Modifier.height(56.dp),
+                shape = RoundedCornerShape(18.dp),
+                color = MaterialTheme.colorScheme.surface,
+                tonalElevation = 2.dp,
+                shadowElevation = 1.dp,
+                onClick = onSearchClick
+            ) {
+                Box(modifier = Modifier.padding(horizontal = 16.dp), contentAlignment = Alignment.Center) {
+                    Icon(Icons.Default.Search, contentDescription = "Search", tint = MaterialTheme.colorScheme.onSurfaceVariant, modifier = Modifier.size(22.dp))
+                }
+            }
+        }
+
+        if (showWelcomeCard) {
+            Box(
+                modifier = Modifier
+                    .fillMaxWidth()
+                    .padding(horizontal = 16.dp),
+                contentAlignment = Alignment.Center
+            ) {
+                Surface(
+                    modifier = Modifier.fillMaxWidth(),
+                    shape = RoundedCornerShape(24.dp),
+                    color = MaterialTheme.colorScheme.surface,
+                    tonalElevation = 3.dp,
+                    shadowElevation = 2.dp
+                ) {
+                    Column(
+                        horizontalAlignment = Alignment.CenterHorizontally,
+                        modifier = Modifier
+                            .fillMaxWidth()
+                            .background(
+                                Brush.horizontalGradient(
+                                    colors = listOf(
+                                        MaterialTheme.colorScheme.primary.copy(alpha = 0.06f),
+                                        Color.Transparent,
+                                        MaterialTheme.colorScheme.primary.copy(alpha = 0.03f)
+                                    )
+                                )
+                            )
+                            .padding(32.dp)
+                    ) {
+                        Surface(
+                            shape = CircleShape,
+                            color = MaterialTheme.colorScheme.primary.copy(alpha = 0.08f),
+                            modifier = Modifier.size(80.dp)
+                        ) {
+                            Box(contentAlignment = Alignment.Center) {
+                                AsyncImage(
+                                    model = R.mipmap.ic_launcher_round,
+                                    contentDescription = null,
+                                    modifier = Modifier.size(56.dp).clip(CircleShape)
+                                )
+                            }
+                        }
+                        Spacer(modifier = Modifier.height(20.dp))
+                        Text(
+                            "Welcome to Oni",
+                            style = MaterialTheme.typography.headlineSmall,
+                            fontWeight = FontWeight.Bold,
+                            color = MaterialTheme.colorScheme.onSurface
+                        )
+                        Spacer(modifier = Modifier.height(12.dp))
+                        Text(
+                            "Your lists are empty. Sign in with AniList to sync your manga list and track your progress, or start exploring!",
+                            style = MaterialTheme.typography.bodyMedium,
+                            color = MaterialTheme.colorScheme.onSurfaceVariant,
+                            textAlign = TextAlign.Center
+                        )
+                        Spacer(modifier = Modifier.height(24.dp))
+                        Button(
+                            onClick = onLoginClick,
+                            modifier = Modifier.fillMaxWidth().height(52.dp),
+                            shape = RoundedCornerShape(16.dp),
+                            colors = ButtonDefaults.buttonColors(containerColor = MaterialTheme.colorScheme.primary)
+                        ) {
+                            Text("Login with AniList", style = MaterialTheme.typography.titleMedium, fontWeight = FontWeight.SemiBold)
+                        }
+                        Spacer(modifier = Modifier.height(16.dp))
+                        Text(
+                            "Don't have an account? Sign up for free at anilist.co",
+                            style = MaterialTheme.typography.labelSmall,
+                            color = MaterialTheme.colorScheme.onSurfaceVariant
+                        )
                     }
                 }
             }
         }
 
         if (resumeReading.isNotEmpty()) {
-            item {
-                Column {
-                    HomeSectionHeader(
-                        title = "Resume Reading",
-                        icon = Icons.Default.PlayArrow,
-                        count = resumeReading.size,
-                        iconTint = HomeStatusColors.getColor("CURRENT")
-                    )
-                    Spacer(modifier = Modifier.height(12.dp))
-                    LazyRow(
-                        contentPadding = PaddingValues(horizontal = 16.dp),
-                        horizontalArrangement = Arrangement.spacedBy(12.dp)
-                    ) {
-                        items(resumeReading) { track ->
-                            ResumeMangaCard(
-                                track = track,
-                                onClick = { onResumeReading(track) },
-                                onRemoveClick = { onRemoveResumeTracking(track) }
-                            )
-                        }
+            Column {
+                HomeSectionHeader(
+                    title = "Resume Reading",
+                    icon = Icons.Default.PlayArrow,
+                    count = resumeReading.size,
+                    iconTint = HomeStatusColors.getColor("CURRENT"),
+                    onClick = {}
+                )
+                Spacer(modifier = Modifier.height(12.dp))
+                androidx.compose.foundation.lazy.LazyRow(
+                    contentPadding = PaddingValues(horizontal = 16.dp),
+                    horizontalArrangement = Arrangement.spacedBy(12.dp)
+                ) {
+                    items(resumeReading.size) { index ->
+                        val track = resumeReading[index]
+                        ResumeMangaCard(
+                            track = track,
+                            onClick = { onResumeReading(track) },
+                            onRemoveClick = { onRemoveResumeTracking(track) }
+                        )
                     }
                 }
             }
         }
 
         if (continueReading.isNotEmpty()) {
-            item {
-                Column {
-                    HomeSectionHeader(
-                        title = "Continue Reading",
-                        icon = Icons.Default.PlayArrow,
-                        count = continueReading.size,
-                        iconTint = HomeStatusColors.getColor("CURRENT")
-                    )
-                    Spacer(modifier = Modifier.height(12.dp))
-                    MangaHorizontalList(
-                        tracks = continueReading,
-                        listType = "CURRENT",
-                        onMangaClick = { track ->
-                            val manga = MangaSearchResult(
-                                title = track.title,
-                                url = track.mangaUrl,
-                                coverUrl = track.coverUrl,
-                                mangaId = track.mangaId
-                            )
-                            onMangaSelected(manga)
-                        }
-                    )
-                }
+            Column {
+                HomeSectionHeader(
+                    title = "Continue Reading",
+                    icon = Icons.Default.PlayArrow,
+                    count = continueReading.size,
+                    iconTint = HomeStatusColors.getColor("CURRENT"),
+                    onClick = {}
+                )
+                Spacer(modifier = Modifier.height(12.dp))
+                MangaHorizontalList(
+                    tracks = continueReading,
+                    listType = "CURRENT",
+                    onMangaClick = { track ->
+                        val manga = MangaSearchResult(
+                            title = track.title,
+                            url = track.mangaUrl,
+                            coverUrl = track.coverUrl,
+                            mangaId = track.mangaId
+                        )
+                        onMangaSelected(manga)
+                    },
+                    onRemoveClick = null,
+                    listIndex = 0
+                )
             }
         }
 
         if (planningToRead.isNotEmpty()) {
-            item {
-                Column {
-                    HomeSectionHeader(
-                        title = "Planning to Read",
-                        icon = Icons.Default.Bookmark,
-                        count = planningToRead.size,
-                        iconTint = HomeStatusColors.getColor("PLANNING")
-                    )
-                    Spacer(modifier = Modifier.height(12.dp))
-                    MangaHorizontalList(
-                        tracks = planningToRead,
-                        listType = "PLANNING",
-                        onMangaClick = { track ->
-                            val manga = MangaSearchResult(
-                                title = track.title,
-                                url = track.mangaUrl,
-                                coverUrl = track.coverUrl,
-                                mangaId = track.mangaId
-                            )
-                            onMangaSelected(manga)
-                        }
-                    )
-                }
+            Column {
+                HomeSectionHeader(
+                    title = "Planning to Read",
+                    icon = Icons.Default.Bookmark,
+                    count = planningToRead.size,
+                    iconTint = HomeStatusColors.getColor("PLANNING"),
+                    onClick = {}
+                )
+                Spacer(modifier = Modifier.height(12.dp))
+                MangaHorizontalList(
+                    tracks = planningToRead,
+                    listType = "PLANNING",
+                    onMangaClick = { track ->
+                        val manga = MangaSearchResult(
+                            title = track.title,
+                            url = track.mangaUrl,
+                            coverUrl = track.coverUrl,
+                            mangaId = track.mangaId
+                        )
+                        onMangaSelected(manga)
+                    },
+                    onRemoveClick = null,
+                    listIndex = 1
+                )
             }
         }
 
-        if (continueReading.isEmpty() && planningToRead.isEmpty() && resumeReading.isEmpty()) {
-            item {
-                Box(
-                    modifier = Modifier
-                        .fillMaxWidth()
-                        .padding(horizontal = 16.dp, vertical = 24.dp),
-                    contentAlignment = Alignment.Center
+        if (allListsEmpty && !showWelcomeCard) {
+            Box(
+                modifier = Modifier
+                    .fillMaxWidth()
+                    .padding(horizontal = 16.dp, vertical = 24.dp),
+                contentAlignment = Alignment.Center
+            ) {
+                Surface(
+                    shape = RoundedCornerShape(18.dp),
+                    color = MaterialTheme.colorScheme.surface,
+                    tonalElevation = 1.dp,
+                    shadowElevation = 1.dp
                 ) {
-                    Surface(
-                        shape = RoundedCornerShape(18.dp),
-                        color = MaterialTheme.colorScheme.surface,
-                        tonalElevation = 1.dp,
-                        shadowElevation = 1.dp
+                    Column(
+                        modifier = Modifier.padding(24.dp),
+                        horizontalAlignment = Alignment.CenterHorizontally
                     ) {
-                        Column(
-                            modifier = Modifier.padding(24.dp),
-                            horizontalAlignment = Alignment.CenterHorizontally
-                        ) {
-                            Icon(Icons.Default.Bookmark, contentDescription = null, tint = MaterialTheme.colorScheme.onSurfaceVariant.copy(alpha = 0.4f), modifier = Modifier.size(40.dp))
-                            Spacer(Modifier.height(12.dp))
-                            Text("Your lists are empty", style = MaterialTheme.typography.titleSmall, fontWeight = FontWeight.SemiBold, color = MaterialTheme.colorScheme.onSurface)
-                            Spacer(Modifier.height(4.dp))
-                            Text("Check out the Explore tab to discover manga!", style = MaterialTheme.typography.bodySmall, color = MaterialTheme.colorScheme.onSurfaceVariant)
-                        }
+                        Icon(Icons.Default.Bookmark, contentDescription = null, tint = MaterialTheme.colorScheme.onSurfaceVariant.copy(alpha = 0.4f), modifier = Modifier.size(40.dp))
+                        Spacer(Modifier.height(12.dp))
+                        Text("Your lists are empty", style = MaterialTheme.typography.titleSmall, fontWeight = FontWeight.SemiBold, color = MaterialTheme.colorScheme.onSurface)
+                        Spacer(Modifier.height(4.dp))
+                        Text("Check out the Explore tab to discover manga!", style = MaterialTheme.typography.bodySmall, color = MaterialTheme.colorScheme.onSurfaceVariant)
                     }
                 }
             }
         }
+
+        Spacer(modifier = Modifier.height(80.dp))
+    }
+
+    if (showStatusDialog && selectedTrack != null) {
+        val track = selectedTrack!!
+        MangaStatusDialog(
+            title = track.title,
+            coverUrl = track.coverUrl,
+            currentStatus = track.status.name,
+            currentChapterNumber = track.currentChapterNumber,
+            totalChapters = track.totalChapters,
+            onDismiss = { showStatusDialog = false; selectedTrack = null },
+            onRemove = { showStatusDialog = false; selectedTrack = null },
+            onUpdate = { status, progress ->
+                onMangaStatusChange(track, status, progress)
+                showStatusDialog = false
+                selectedTrack = null
+            }
+        )
     }
 }

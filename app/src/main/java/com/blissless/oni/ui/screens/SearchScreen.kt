@@ -122,6 +122,7 @@ data class SearchFilters(
 fun SearchScreen(
     viewModel: MainViewModel,
     onMangaSelected: (AniListSearchResult) -> Unit,
+    onDismiss: () -> Unit = {},
     isActive: Boolean = false
 ) {
     var filters by remember { mutableStateOf(SearchFilters()) }
@@ -222,9 +223,17 @@ fun SearchScreen(
             Row(
                 modifier = Modifier
                     .fillMaxWidth()
-                    .padding(start = 16.dp, end = 16.dp, top = 32.dp),
+                    .padding(start = 8.dp, end = 16.dp, top = 32.dp),
                 verticalAlignment = Alignment.CenterVertically
             ) {
+                IconButton(onClick = onDismiss) {
+                    Icon(
+                        Icons.Default.Close,
+                        contentDescription = "Close",
+                        tint = Color.White.copy(alpha = 0.7f),
+                        modifier = Modifier.size(24.dp)
+                    )
+                }
                 Text("Search", color = Color.White.copy(alpha = 0.6f), style = MaterialTheme.typography.titleLarge)
             }
 
