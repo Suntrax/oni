@@ -148,6 +148,12 @@ class MainViewModel(private val context: Context) : ViewModel() {
     private var lastSearchedQuery: String = ""
     private var searchJob: kotlinx.coroutines.Job? = null
 
+    private val _openChapterSelectOnLoad = MutableStateFlow(false)
+    val openChapterSelectOnLoad: StateFlow<Boolean> = _openChapterSelectOnLoad.asStateFlow()
+
+    fun consumeOpenChapterSelect() { _openChapterSelectOnLoad.value = false }
+    fun requestOpenChapterSelect() { _openChapterSelectOnLoad.value = true }
+
     private var currentMangaId: String? = null
     private var currentMangaTitle: String? = null
     private var currentMangaCoverUrl: String? = null
@@ -362,7 +368,7 @@ class MainViewModel(private val context: Context) : ViewModel() {
     fun refreshTrackingLists() {
         val allReading = trackingManager.getContinueReading()
         _resumeReading.value = allReading.filter { it.scrollProgress > 0f }
-        _continueReading.value = allReading
+        _continueReading.value = allReading.filter { it.scrollProgress == 0f && it.currentChapterNumber > 0 }
         _planningToRead.value = trackingManager.getPlanningToRead()
     }
 
@@ -940,7 +946,13 @@ class MainViewModel(private val context: Context) : ViewModel() {
         } else {
             0
         }
-        val nextChapterIndex = if (savedIndex > 0) savedIndex + 1 else 0
+        val nextChapterIndex = if (tracking != null && tracking.scrollProgress == 0f && savedIndex >= 0) {
+            savedIndex + 1
+        } else if (savedIndex > 0) {
+            savedIndex + 1
+        } else {
+            0
+        }
 
         val chapterList = _chapters.value
         if (chapterList.isNotEmpty()) {

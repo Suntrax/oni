@@ -34,9 +34,12 @@ import androidx.compose.material.icons.filled.BookmarkBorder
 import androidx.compose.material.icons.filled.PlayArrow
 import androidx.compose.material.icons.filled.Search
 import androidx.compose.material.icons.outlined.Info
+import androidx.compose.material.icons.outlined.PlayArrow
+import androidx.compose.material3.Button
 import androidx.compose.material3.CircularProgressIndicator
 import androidx.compose.material3.FilledTonalIconButton
 import androidx.compose.material3.Icon
+import androidx.compose.material3.ButtonDefaults
 import androidx.compose.material3.IconButtonDefaults
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.Surface
@@ -442,17 +445,17 @@ fun FeaturedCarousel(
                                 }
                             }
 
-                            FilledTonalIconButton(
+                            Button(
                                 onClick = { onReadNow(currentManga) },
                                 modifier = Modifier.height(50.dp),
                                 shape = RoundedCornerShape(16.dp),
-                                colors = IconButtonDefaults.filledTonalIconButtonColors(
+                                colors = ButtonDefaults.buttonColors(
                                     containerColor = Color.White.copy(alpha = 0.15f),
                                     contentColor = Color.White
                                 )
                             ) {
                                 Icon(
-                                    Icons.Default.PlayArrow,
+                                    Icons.Outlined.PlayArrow,
                                     contentDescription = "Read Now",
                                     modifier = Modifier.size(22.dp)
                                 )

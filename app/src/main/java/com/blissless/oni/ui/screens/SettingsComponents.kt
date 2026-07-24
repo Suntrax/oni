@@ -50,6 +50,7 @@ import androidx.compose.ui.draw.clip
 import androidx.compose.ui.graphics.vector.ImageVector
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
+import coil.compose.AsyncImage
 
 data class SettingsGroup(
     val id: String,
@@ -84,11 +85,10 @@ fun SettingsLandingPage(
                     .background(MaterialTheme.colorScheme.primary.copy(alpha = 0.12f)),
                 contentAlignment = Alignment.Center
             ) {
-                Icon(
-                    Icons.Default.Tune,
+                AsyncImage(
+                    model = com.blissless.oni.R.mipmap.ic_launcher_round,
                     contentDescription = "App",
-                    tint = MaterialTheme.colorScheme.primary,
-                    modifier = Modifier.size(24.dp)
+                    modifier = Modifier.size(36.dp).clip(CircleShape)
                 )
             }
             Column {

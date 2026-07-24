@@ -167,8 +167,8 @@ fun MangaHomeCard(
     val progressText = when (listType) {
         "CURRENT" -> {
             when {
-                total > 0 -> "Ch. ${track.currentChapterNumber} / $total"
-                else -> "Ch. ${track.currentChapterNumber}"
+                total > 0 -> "Ch. ${track.currentChapterNumber + 1} / $total"
+                else -> "Ch. ${track.currentChapterNumber + 1}"
             }
         }
         "COMPLETED" -> if (total > 0) "$total ch" else "${track.currentChapterNumber} ch"
@@ -346,7 +346,7 @@ fun ResumeMangaCard(
                         color = Color.Black.copy(alpha = 0.65f)
                     ) {
                         Text(
-                            text = "Ch. ${maxOf(track.currentChapterNumber, 0) + 1}",
+                            text = "Ch. ${maxOf(track.currentChapterNumber, 1)}",
                             style = MaterialTheme.typography.labelMedium,
                             color = Color.White,
                             fontWeight = FontWeight.Bold,

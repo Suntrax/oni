@@ -147,6 +147,7 @@ fun OniApp(viewModel: MainViewModel) {
                     onSearchClick = { showSearch = true },
                     onReadNow = { manga ->
                         viewModel.selectManga(manga)
+                        viewModel.requestOpenChapterSelect()
                         currentScreenType = "detail"
                     }
                 )
