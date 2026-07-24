@@ -149,15 +149,14 @@ fun MangaDetailScreen(
     val openChapterSelectOnLoad by viewModel.openChapterSelectOnLoad.collectAsState()
     val context = LocalContext.current
 
-    // Auto-open chapter select when requested (e.g., from "Read Now" button)
-    LaunchedEffect(openChapterSelectOnLoad) {
+    // Auto-open chapter select when requested (e.g., from "Read Now" button).
+    // Keyed on detail so the effect re-fires once manga data finishes loading.
+    LaunchedEffect(openChapterSelectOnLoad, detail, selectedExtensionAuthority) {
         if (openChapterSelectOnLoad && detail != null && selectedExtensionAuthority != null) {
             viewModel.consumeOpenChapterSelect()
             showChapterSelect = true
             viewModel.showChapterListOnly()
             onOpenReader()
-        } else if (openChapterSelectOnLoad) {
-            viewModel.consumeOpenChapterSelect()
         }
     }
 
@@ -772,66 +771,69 @@ private fun ActionButtonsCard(
             Spacer(modifier = Modifier.height(10.dp))
 
             Row(
-                modifier = Modifier
-                    .fillMaxWidth()
-                    .height(44.dp)
-                    .clip(RoundedCornerShape(12.dp))
-                    .background(MaterialTheme.colorScheme.surfaceVariant.copy(alpha = 0.5f))
-                    .clickable(onClick = onStatusDialogShow),
-                horizontalArrangement = Arrangement.Center,
-                verticalAlignment = Alignment.CenterVertically
+                modifier = Modifier.fillMaxWidth(),
+                horizontalArrangement = Arrangement.spacedBy(10.dp)
             ) {
-                Icon(
-                    when (currentStatus) {
-                        ReadingStatus.READING -> Icons.Default.Bookmark
-                        ReadingStatus.PLANNING -> Icons.Default.CalendarMonth
-                        else -> Icons.Default.BookmarkBorder
-                    },
-                    contentDescription = null,
-                    modifier = Modifier.size(18.dp),
-                    tint = when (currentStatus) {
-                        ReadingStatus.READING -> StatusColors["READING"] ?: MaterialTheme.colorScheme.primary
-                        ReadingStatus.PLANNING -> StatusColors["PLANNING"] ?: MaterialTheme.colorScheme.primary
-                        ReadingStatus.COMPLETED -> StatusColors["COMPLETED"] ?: MaterialTheme.colorScheme.primary
-                        else -> MaterialTheme.colorScheme.onSurfaceVariant
-                    }
-                )
-                Spacer(Modifier.width(6.dp))
-                Text(
-                    text = when (currentStatus) {
-                        ReadingStatus.READING -> "Reading"
-                        ReadingStatus.PLANNING -> "Planned"
-                        ReadingStatus.COMPLETED -> "Completed"
-                        ReadingStatus.ON_HOLD -> "Paused"
-                        ReadingStatus.DROPPED -> "Dropped"
-                        null -> "Track"
-                    },
-                    fontWeight = FontWeight.Medium,
-                    fontSize = 13.sp,
-                    color = when (currentStatus) {
-                        ReadingStatus.READING -> StatusColors["READING"] ?: MaterialTheme.colorScheme.primary
-                        ReadingStatus.PLANNING -> StatusColors["PLANNING"] ?: MaterialTheme.colorScheme.primary
-                        ReadingStatus.COMPLETED -> StatusColors["COMPLETED"] ?: MaterialTheme.colorScheme.primary
-                        else -> MaterialTheme.colorScheme.onSurface
-                    }
-                )
-            }
+                Row(
+                    modifier = Modifier
+                        .weight(1f)
+                        .height(44.dp)
+                        .clip(RoundedCornerShape(12.dp))
+                        .background(MaterialTheme.colorScheme.surfaceVariant.copy(alpha = 0.5f))
+                        .clickable(onClick = onStatusDialogShow),
+                    horizontalArrangement = Arrangement.Center,
+                    verticalAlignment = Alignment.CenterVertically
+                ) {
+                    Icon(
+                        when (currentStatus) {
+                            ReadingStatus.READING -> Icons.Default.Bookmark
+                            ReadingStatus.PLANNING -> Icons.Default.CalendarMonth
+                            else -> Icons.Default.BookmarkBorder
+                        },
+                        contentDescription = null,
+                        modifier = Modifier.size(18.dp),
+                        tint = when (currentStatus) {
+                            ReadingStatus.READING -> StatusColors["READING"] ?: MaterialTheme.colorScheme.primary
+                            ReadingStatus.PLANNING -> StatusColors["PLANNING"] ?: MaterialTheme.colorScheme.primary
+                            ReadingStatus.COMPLETED -> StatusColors["COMPLETED"] ?: MaterialTheme.colorScheme.primary
+                            else -> MaterialTheme.colorScheme.onSurfaceVariant
+                        }
+                    )
+                    Spacer(Modifier.width(6.dp))
+                    Text(
+                        text = when (currentStatus) {
+                            ReadingStatus.READING -> "Reading"
+                            ReadingStatus.PLANNING -> "Planned"
+                            ReadingStatus.COMPLETED -> "Completed"
+                            ReadingStatus.ON_HOLD -> "Paused"
+                            ReadingStatus.DROPPED -> "Dropped"
+                            null -> "Track"
+                        },
+                        fontWeight = FontWeight.Medium,
+                        fontSize = 13.sp,
+                        color = when (currentStatus) {
+                            ReadingStatus.READING -> StatusColors["READING"] ?: MaterialTheme.colorScheme.primary
+                            ReadingStatus.PLANNING -> StatusColors["PLANNING"] ?: MaterialTheme.colorScheme.primary
+                            ReadingStatus.COMPLETED -> StatusColors["COMPLETED"] ?: MaterialTheme.colorScheme.primary
+                            else -> MaterialTheme.colorScheme.onSurface
+                        }
+                    )
+                }
 
-            Spacer(modifier = Modifier.height(10.dp))
-
-            Row(
-                modifier = Modifier
-                    .fillMaxWidth()
-                    .height(44.dp)
-                    .clip(RoundedCornerShape(12.dp))
-                    .background(MaterialTheme.colorScheme.surfaceVariant.copy(alpha = 0.5f))
-                    .clickable(onClick = onOpenChapterSelect),
-                horizontalArrangement = Arrangement.Center,
-                verticalAlignment = Alignment.CenterVertically
-            ) {
-                Icon(Icons.AutoMirrored.Filled.List, contentDescription = null, modifier = Modifier.size(18.dp), tint = MaterialTheme.colorScheme.primary)
-                Spacer(Modifier.width(6.dp))
-                Text("All Chapters", fontWeight = FontWeight.Medium, fontSize = 13.sp, color = MaterialTheme.colorScheme.onSurface, letterSpacing = 0.3.sp)
+                Row(
+                    modifier = Modifier
+                        .weight(1f)
+                        .height(44.dp)
+                        .clip(RoundedCornerShape(12.dp))
+                        .background(MaterialTheme.colorScheme.surfaceVariant.copy(alpha = 0.5f))
+                        .clickable(onClick = onOpenChapterSelect),
+                    horizontalArrangement = Arrangement.Center,
+                    verticalAlignment = Alignment.CenterVertically
+                ) {
+                    Icon(Icons.AutoMirrored.Filled.List, contentDescription = null, modifier = Modifier.size(18.dp), tint = MaterialTheme.colorScheme.primary)
+                    Spacer(Modifier.width(6.dp))
+                    Text("Chapters", fontWeight = FontWeight.Medium, fontSize = 13.sp, color = MaterialTheme.colorScheme.onSurface, letterSpacing = 0.3.sp)
+                }
             }
 
         }

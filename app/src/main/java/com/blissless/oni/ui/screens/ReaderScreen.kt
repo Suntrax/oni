@@ -55,7 +55,6 @@ import androidx.compose.material3.HorizontalDivider
 import androidx.compose.material3.Icon
 import androidx.compose.material3.IconButton
 import androidx.compose.material3.MaterialTheme
-import androidx.compose.material3.Scaffold
 import androidx.compose.material3.Text
 import androidx.compose.material3.TopAppBar
 import androidx.compose.material3.TopAppBarDefaults
@@ -123,6 +122,7 @@ fun ReaderScreen(
     val listState = rememberLazyListState()
     var isShowingChapterList by remember { mutableStateOf(selectedIndex < 0) }
     var scrollProgress by remember { mutableStateOf(0f) }
+    var showControls by remember { mutableStateOf(false) }
 
     // Unified reading progress (0..1), preserved across mode switches so the
     // user doesn't lose their place when they switch between vertical scroll
@@ -130,8 +130,24 @@ fun ReaderScreen(
     // reads from it to compute its initial position.
     var unifiedProgress by remember { mutableStateOf(0f) }
 
+    // Hide/show the Android status bar based on controls visibility
+    val activity = context as? android.app.Activity
+    LaunchedEffect(showControls) {
+        activity?.let {
+            val controller = androidx.core.view.WindowCompat.getInsetsController(it.window, it.window.decorView)
+            if (showControls) {
+                controller.show(android.view.WindowInsets.Type.statusBars())
+            } else {
+                controller.hide(android.view.WindowInsets.Type.statusBars())
+            }
+            controller.systemBarsBehavior =
+                androidx.core.view.WindowInsetsControllerCompat.BEHAVIOR_SHOW_TRANSIENT_BARS_BY_SWIPE
+        }
+    }
+
     LaunchedEffect(selectedIndex) {
         isShowingChapterList = selectedIndex < 0
+        showControls = selectedIndex < 0
         if (selectedIndex < 0) {
             viewModel.refreshTrackingLists()
         }
@@ -238,9 +254,165 @@ fun ReaderScreen(
         onBack()
     }
 
-    Scaffold(
-        modifier = Modifier.background(Color.Black),
-        topBar = {
+    Box(
+        modifier = Modifier
+            .fillMaxSize()
+            .background(Color.Black)
+    ) {
+        // --- Content layer (fills entire screen, no padding) ---
+        when {
+            isLoading -> {
+                Box(
+                    modifier = Modifier.fillMaxSize(),
+                    contentAlignment = Alignment.Center
+                ) {
+                    Column(horizontalAlignment = Alignment.CenterHorizontally) {
+                        CircularProgressIndicator(color = MaterialTheme.colorScheme.primary)
+                        Spacer(modifier = Modifier.height(16.dp))
+                        Text("Loading...", color = Color.White)
+                    }
+                }
+            }
+
+            isShowingChapterList || selectedIndex < 0 -> {
+                ChapterListWithGroups(
+                    chapters = chapters,
+                    selectedIndex = selectedIndex,
+                    readChapterIndices = readChapterIndices,
+                    nextChapterToRead = nextChapterToRead,
+                    onChapterClick = {
+                        viewModel.selectChapter(it)
+                        isShowingChapterList = false
+                    },
+                    onContinueReading = {
+                        if (selectedExtensionAuthority == null) {
+                            Toast.makeText(context, "Select a default extension in Settings first", Toast.LENGTH_SHORT).show()
+                        } else {
+                            nextChapterToRead?.let { idx ->
+                                viewModel.selectChapter(idx)
+                                isShowingChapterList = false
+                            }
+                        }
+                    }
+                )
+            }
+
+            chapterImages is UiState.Success -> {
+                val images = (chapterImages as UiState.Success).data.images
+                if (images.isEmpty()) {
+                    Box(
+                        modifier = Modifier.fillMaxSize(),
+                        contentAlignment = Alignment.Center
+                    ) {
+                        Column(horizontalAlignment = Alignment.CenterHorizontally) {
+                            Text("No images found", color = Color.White)
+                            Spacer(modifier = Modifier.height(16.dp))
+                            Button(onClick = { viewModel.selectChapter(selectedIndex) }) {
+                                Text("Retry")
+                            }
+                        }
+                    }
+                } else when (readerMode) {
+                    ReaderMode.VERTICAL_SCROLL -> {
+                        LazyColumn(
+                            state = listState,
+                            modifier = Modifier.fillMaxSize(),
+                            contentPadding = PaddingValues(8.dp),
+                            verticalArrangement = Arrangement.spacedBy(8.dp)
+                        ) {
+                            itemsIndexed(images, key = { index, _ -> "page_$index" }) { index, imageUrl ->
+                                MihonZoomableImage(
+                                    imageUrl = imageUrl,
+                                    contentDescription = "Page ${index + 1}",
+                                    modifier = Modifier
+                                        .fillMaxWidth()
+                                        .aspectRatio(7f / 10f),
+                                    fillWidth = true,
+                                    onSingleTap = { showControls = !showControls },
+                                    gesturesEnabled = false
+                                )
+                            }
+                        }
+                    }
+
+                    ReaderMode.LEFT_TO_RIGHT, ReaderMode.RIGHT_TO_LEFT -> {
+                        PagedMangaReader(
+                            images = images,
+                            initialPage = currentPageIndex.coerceIn(0, images.lastIndex),
+                            mode = readerMode,
+                            chapterTitle = if (selectedIndex in chapters.indices)
+                                chapters[selectedIndex].title else null,
+                            onPageChanged = { page ->
+                                currentPageIndex = page
+                                val progress = if (images.size > 1) {
+                                    page.toFloat() / (images.size - 1).toFloat()
+                                } else 1f
+                                scrollProgress = progress
+                                unifiedProgress = progress
+                                viewModel.onChapterScrollProgress(progress)
+                            },
+                            onChapterBoundary = { direction ->
+                                val target = selectedIndex + direction
+                                if (target in chapters.indices) {
+                                    viewModel.selectChapter(target)
+                                    currentPageIndex = if (direction > 0) 0 else 0
+                                }
+                            },
+                            onMiddleTap = { showControls = !showControls }
+                        )
+                    }
+                }
+            }
+
+            chapterImages is UiState.Error -> {
+                Box(
+                    modifier = Modifier.fillMaxSize(),
+                    contentAlignment = Alignment.Center
+                ) {
+                    Column(horizontalAlignment = Alignment.CenterHorizontally) {
+                        Text(
+                            "Error: ${(chapterImages as UiState.Error).message}",
+                            color = Color.Red
+                        )
+                        Spacer(modifier = Modifier.height(16.dp))
+                        Button(onClick = { viewModel.selectChapter(selectedIndex) }) {
+                            Text("Retry")
+                        }
+                    }
+                }
+            }
+
+            else -> {
+                ChapterListWithGroups(
+                    chapters = chapters,
+                    selectedIndex = selectedIndex,
+                    readChapterIndices = readChapterIndices,
+                    nextChapterToRead = nextChapterToRead,
+                    onChapterClick = {
+                        viewModel.selectChapter(it)
+                        isShowingChapterList = false
+                    },
+                    onContinueReading = {
+                        if (selectedExtensionAuthority == null) {
+                            Toast.makeText(context, "Select a default extension in Settings first", Toast.LENGTH_SHORT).show()
+                        } else {
+                            nextChapterToRead?.let { idx ->
+                                viewModel.selectChapter(idx)
+                                isShowingChapterList = false
+                            }
+                        }
+                    }
+                )
+            }
+        }
+
+        // --- Overlay: top bar + progress (floats on top of content) ---
+        AnimatedVisibility(
+            visible = showControls && !isShowingChapterList && selectedIndex >= 0,
+            enter = fadeIn(tween(150)),
+            exit = fadeOut(tween(150)),
+            modifier = Modifier.align(Alignment.TopCenter)
+        ) {
             Column {
                 TopAppBar(
                     title = {
@@ -275,20 +447,6 @@ fun ReaderScreen(
                     },
                     actions = {
                         if (!isShowingChapterList && selectedIndex >= 0) {
-                            // Segmented reader-mode indicator. Three mini icons
-                            // in a row; the active mode is highlighted with the
-                            // app accent color, the others are dimmed. Tapping
-                            // any of the three directly selects that mode — no
-                            // more cycling through one button at a time.
-                            //
-                            // Icons chosen to match each mode's mental model:
-                            //  - ViewAgenda      : stacked horizontal bars = vertical scroll
-                            //  - ArrowForward    : rightward arrow = LTR (swipe left for next)
-                            //  - ArrowBack       : leftward arrow = RTL (swipe right for next)
-                            ReaderModeSegmentedToggle(
-                                currentMode = readerMode,
-                                onSelect = { viewModel.setReaderMode(it) }
-                            )
                             IconButton(
                                 onClick = {
                                     if (selectedIndex > 0) {
@@ -298,13 +456,13 @@ fun ReaderScreen(
                                 enabled = selectedIndex > 0
                             ) {
                                 Icon(
-                                    Icons.Default.SkipPrevious, 
-                                    contentDescription = "Previous Chapter", 
+                                    Icons.Default.SkipPrevious,
+                                    contentDescription = "Previous Chapter",
                                     tint = if (selectedIndex > 0) Color.White else Color.White.copy(alpha = 0.3f)
                                 )
                             }
                             IconButton(
-                                onClick = { 
+                                onClick = {
                                     if (selectedIndex < chapters.size - 1) {
                                         viewModel.selectChapter(selectedIndex + 1)
                                     }
@@ -312,8 +470,8 @@ fun ReaderScreen(
                                 enabled = selectedIndex < chapters.size - 1
                             ) {
                                 Icon(
-                                    Icons.Default.SkipNext, 
-                                    contentDescription = "Next Chapter", 
+                                    Icons.Default.SkipNext,
+                                    contentDescription = "Next Chapter",
                                     tint = if (selectedIndex < chapters.size - 1) Color.White else Color.White.copy(alpha = 0.3f)
                                 )
                             }
@@ -330,6 +488,7 @@ fun ReaderScreen(
                         modifier = Modifier
                             .fillMaxWidth()
                             .height(3.dp)
+                            .background(Color.Black.copy(alpha = 0.95f))
                     ) {
                         Box(
                             modifier = Modifier
@@ -360,175 +519,25 @@ fun ReaderScreen(
                     }
                 }
             }
-        },
-        containerColor = Color.Black
-    ) { paddingValues ->
-        when {
-            isLoading -> {
-                Box(
-                    modifier = Modifier
-                        .fillMaxSize()
-                        .padding(paddingValues),
-                    contentAlignment = Alignment.Center
-                ) {
-                    Column(horizontalAlignment = Alignment.CenterHorizontally) {
-                        CircularProgressIndicator(color = MaterialTheme.colorScheme.primary)
-                        Spacer(modifier = Modifier.height(16.dp))
-                        Text("Loading...", color = Color.White)
-                    }
-                }
-            }
+        }
 
-            isShowingChapterList || selectedIndex < 0 -> {
-                ChapterListWithGroups(
-                    chapters = chapters,
-                    selectedIndex = selectedIndex,
-                    readChapterIndices = readChapterIndices,
-                    nextChapterToRead = nextChapterToRead,
-                    onChapterClick = { 
-                        viewModel.selectChapter(it)
-                        isShowingChapterList = false
-                    },
-                    onContinueReading = {
-                        if (selectedExtensionAuthority == null) {
-                            Toast.makeText(context, "Select a default extension in Settings first", Toast.LENGTH_SHORT).show()
-                        } else {
-                            nextChapterToRead?.let { idx ->
-                                viewModel.selectChapter(idx)
-                                isShowingChapterList = false
-                            }
-                        }
-                    },
-                    modifier = Modifier.padding(paddingValues)
-                )
-            }
-
-            chapterImages is UiState.Success -> {
-                val images = (chapterImages as UiState.Success).data.images
-                if (images.isEmpty()) {
-                    Box(
-                        modifier = Modifier
-                            .fillMaxSize()
-                            .padding(paddingValues),
-                        contentAlignment = Alignment.Center
-                    ) {
-                        Column(horizontalAlignment = Alignment.CenterHorizontally) {
-                            Text("No images found", color = Color.White)
-                            Spacer(modifier = Modifier.height(16.dp))
-                            Button(onClick = { viewModel.selectChapter(selectedIndex) }) {
-                                Text("Retry")
-                            }
-                        }
-                    }
-                } else when (readerMode) {
-                    // ---------------- Vertical scroll (webtoon) ----------------
-                    // Original behaviour: continuous LazyColumn, one page per row.
-                    // Pages use MihonZoomableImage so the user can pinch-zoom a
-                    // specific page even in vertical mode, while one-finger drag
-                    // at 1× still scrolls the list.
-                    ReaderMode.VERTICAL_SCROLL -> {
-                        LazyColumn(
-                            state = listState,
-                            modifier = Modifier
-                                .fillMaxSize()
-                                .padding(paddingValues),
-                            contentPadding = PaddingValues(8.dp),
-                            verticalArrangement = Arrangement.spacedBy(8.dp)
-                        ) {
-                            itemsIndexed(images, key = { index, _ -> "page_$index" }) { index, imageUrl ->
-                                MihonZoomableImage(
-                                    imageUrl = imageUrl,
-                                    contentDescription = "Page ${index + 1}",
-                                    modifier = Modifier
-                                        .fillMaxWidth()
-                                        .aspectRatio(7f / 10f),
-                                    fillWidth = true,
-                                    gesturesEnabled = false
-                                )
-                            }
-                        }
-                    }
-
-                    // ---------------- Paged (LTR / RTL) ----------------
-                    // One page per screen, swipe horizontally to navigate.
-                    // Single tap = next page (with a small back-edge zone),
-                    // double tap = zoom in/out at the tap point.
-                    ReaderMode.LEFT_TO_RIGHT, ReaderMode.RIGHT_TO_LEFT -> {
-                        PagedMangaReader(
-                            images = images,
-                            initialPage = currentPageIndex.coerceIn(0, images.lastIndex),
-                            mode = readerMode,
-                            chapterTitle = if (selectedIndex in chapters.indices)
-                                chapters[selectedIndex].title else null,
-                            onPageChanged = { page ->
-                                currentPageIndex = page
-                                // Feed the pager's position into the same
-                                // scroll-progress machinery the vertical list
-                                // uses, so AniList "read" sync still fires at
-                                // the configured threshold.
-                                val progress = if (images.size > 1) {
-                                    page.toFloat() / (images.size - 1).toFloat()
-                                } else 1f
-                                scrollProgress = progress
-                                unifiedProgress = progress
-                                viewModel.onChapterScrollProgress(progress)
-                            },
-                            onChapterBoundary = { direction ->
-                                val target = selectedIndex + direction
-                                if (target in chapters.indices) {
-                                    viewModel.selectChapter(target)
-                                    // Reset page index for the new chapter so
-                                    // the header indicator starts at 1/total.
-                                    currentPageIndex = if (direction > 0) 0 else 0
-                                }
-                            },
-                            modifier = Modifier.padding(paddingValues)
-                        )
-                    }
-                }
-            }
-
-            chapterImages is UiState.Error -> {
-                Box(
-                    modifier = Modifier
-                        .fillMaxSize()
-                        .padding(paddingValues),
-                    contentAlignment = Alignment.Center
-                ) {
-                    Column(horizontalAlignment = Alignment.CenterHorizontally) {
-                        Text(
-                            "Error: ${(chapterImages as UiState.Error).message}",
-                            color = Color.Red
-                        )
-                        Spacer(modifier = Modifier.height(16.dp))
-                        Button(onClick = { viewModel.selectChapter(selectedIndex) }) {
-                            Text("Retry")
-                        }
-                    }
-                }
-            }
-
-            else -> {
-                ChapterListWithGroups(
-                    chapters = chapters,
-                    selectedIndex = selectedIndex,
-                    readChapterIndices = readChapterIndices,
-                    nextChapterToRead = nextChapterToRead,
-                    onChapterClick = { 
-                        viewModel.selectChapter(it)
-                        isShowingChapterList = false
-                    },
-                    onContinueReading = {
-                        if (selectedExtensionAuthority == null) {
-                            Toast.makeText(context, "Select a default extension in Settings first", Toast.LENGTH_SHORT).show()
-                        } else {
-                            nextChapterToRead?.let { idx ->
-                                viewModel.selectChapter(idx)
-                                isShowingChapterList = false
-                            }
-                        }
-                    },
-                    modifier = Modifier.padding(paddingValues)
+        // --- Overlay: bottom bar (reader mode toggle, floats at bottom) ---
+        AnimatedVisibility(
+            visible = showControls && !isShowingChapterList && selectedIndex >= 0,
+            enter = fadeIn(tween(150)),
+            exit = fadeOut(tween(150)),
+            modifier = Modifier.align(Alignment.BottomCenter)
+        ) {
+            Box(
+                modifier = Modifier
+                    .fillMaxWidth()
+                    .background(Color.Black.copy(alpha = 0.95f))
+                    .padding(horizontal = 16.dp, vertical = 10.dp),
+                contentAlignment = Alignment.Center
+            ) {
+                ReaderModeSegmentedToggle(
+                    currentMode = readerMode,
+                    onSelect = { viewModel.setReaderMode(it) }
                 )
             }
         }
