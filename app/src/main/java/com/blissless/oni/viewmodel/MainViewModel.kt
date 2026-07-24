@@ -1100,6 +1100,7 @@ class MainViewModel(private val context: Context) : ViewModel() {
                 val existing = trackingManager.getMangaTracking(mangaId)
 
                 if (existing == null) {
+                    if (scrollPercent <= 0f) return@let
                     val track = MangaTrack(
                         mangaId = mangaId,
                         title = currentMangaTitle ?: "",
@@ -1770,7 +1771,7 @@ class MainViewModel(private val context: Context) : ViewModel() {
     }
 
     fun clearResumeProgress(mangaId: String) {
-        trackingManager.resetScrollProgress(mangaId)
+        trackingManager.removeTracking(mangaId)
         refreshTrackingLists()
     }
 
