@@ -960,9 +960,12 @@ class MainViewModel(private val context: Context) : ViewModel() {
             }
 
             val safeIndex = currentPosition.coerceIn(0, chapterList.lastIndex.coerceAtLeast(0))
-            val chapter = chapterList.getOrNull(safeIndex)
+            val nextIndex = (safeIndex + 1).coerceIn(0, chapterList.lastIndex.coerceAtLeast(0))
+            val chapter = chapterList.getOrNull(nextIndex)
             if (chapter != null) {
-                _selectedChapterIndex.value = safeIndex
+                _selectedChapterIndex.value = nextIndex
+                _readChapterIndices.value = (0 until nextIndex).toSet()
+                _nextChapterToRead.value = nextIndex
                 _isChapterRead.value = false
                 _isLoading.value = true
                 loadChapterImages(chapter.url)
