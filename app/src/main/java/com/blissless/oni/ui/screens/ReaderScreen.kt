@@ -3,6 +3,7 @@ package com.blissless.oni.ui.screens
 import android.widget.Toast
 import androidx.activity.compose.BackHandler
 import androidx.compose.animation.AnimatedVisibility
+import androidx.compose.runtime.DisposableEffect
 import androidx.compose.animation.core.animateFloatAsState
 import androidx.compose.animation.core.tween
 import androidx.compose.animation.expandVertically
@@ -110,6 +111,8 @@ fun ReaderScreen(
     val resumeScrollProgress by viewModel.resumeScrollProgress.collectAsState()
     val readerMode by viewModel.readerMode.collectAsState()
     val selectedExtensionAuthority by viewModel.selectedExtensionAuthority.collectAsState()
+    val mangaTitle by viewModel.mangaTitle.collectAsState()
+    val showPageIndicator by viewModel.showPageIndicator.collectAsState()
 
     val context = LocalContext.current
 
@@ -142,6 +145,16 @@ fun ReaderScreen(
             }
             controller.systemBarsBehavior =
                 androidx.core.view.WindowInsetsControllerCompat.BEHAVIOR_SHOW_TRANSIENT_BARS_BY_SWIPE
+        }
+    }
+
+    // Restore the status bar when leaving the reader screen
+    DisposableEffect(Unit) {
+        onDispose {
+            activity?.let {
+                val controller = androidx.core.view.WindowCompat.getInsetsController(it.window, it.window.decorView)
+                controller.show(android.view.WindowInsets.Type.statusBars())
+            }
         }
     }
 
@@ -418,20 +431,13 @@ fun ReaderScreen(
                     title = {
                         Column {
                             Text(
-                                text = "Oni Reader",
+                                text = mangaTitle.ifBlank { "Oni Reader" },
                                 maxLines = 1,
                                 overflow = TextOverflow.Ellipsis
                             )
                             if (selectedIndex >= 0 && selectedIndex < chapters.size) {
-                                val pagePart = when {
-                                    chapterImages is UiState.Success -> {
-                                        val total = (chapterImages as UiState.Success).data.images.size
-                                        if (total > 0) "  ·  Page ${currentPageIndex + 1}/$total" else ""
-                                    }
-                                    else -> ""
-                                }
                                 Text(
-                                    text = (chapters[selectedIndex].title ?: "Chapter ${selectedIndex + 1}") + pagePart,
+                                    text = chapters[selectedIndex].title ?: "Chapter ${selectedIndex + 1}",
                                     style = MaterialTheme.typography.bodySmall,
                                     color = MaterialTheme.colorScheme.onSurfaceVariant,
                                     maxLines = 1,
@@ -521,7 +527,30 @@ fun ReaderScreen(
             }
         }
 
-        // --- Overlay: bottom bar (reader mode toggle, floats at bottom) ---
+        // --- Overlay: page indicator (bottom-right floating pill) ---
+        if (showPageIndicator && selectedIndex >= 0 && chapterImages is UiState.Success) {
+            val total = (chapterImages as UiState.Success).data.images.size
+            if (total > 0) {
+                Box(
+                    modifier = Modifier
+                        .align(Alignment.BottomEnd)
+                        .padding(end = 12.dp, bottom = 56.dp)
+                        .background(
+                            Color.Black.copy(alpha = 0.7f),
+                            RoundedCornerShape(12.dp)
+                        )
+                        .padding(horizontal = 10.dp, vertical = 4.dp)
+                ) {
+                    Text(
+                        text = "${currentPageIndex + 1} / $total",
+                        style = MaterialTheme.typography.labelMedium,
+                        color = Color.White
+                    )
+                }
+            }
+        }
+
+        // --- Overlay: bottom bar (reader mode toggle + page indicator toggle) ---
         AnimatedVisibility(
             visible = showControls && !isShowingChapterList && selectedIndex >= 0,
             enter = fadeIn(tween(150)),
@@ -532,13 +561,24 @@ fun ReaderScreen(
                 modifier = Modifier
                     .fillMaxWidth()
                     .background(Color.Black.copy(alpha = 0.95f))
-                    .padding(horizontal = 16.dp, vertical = 10.dp),
-                contentAlignment = Alignment.Center
+                    .padding(horizontal = 16.dp, vertical = 10.dp)
             ) {
                 ReaderModeSegmentedToggle(
                     currentMode = readerMode,
-                    onSelect = { viewModel.setReaderMode(it) }
+                    onSelect = { viewModel.setReaderMode(it) },
+                    modifier = Modifier.align(Alignment.Center)
                 )
+                IconButton(
+                    onClick = { viewModel.setShowPageIndicator(!showPageIndicator) },
+                    modifier = Modifier.align(Alignment.CenterEnd).size(32.dp)
+                ) {
+                    Icon(
+                        Icons.Default.ViewAgenda,
+                        contentDescription = "Toggle page indicator",
+                        tint = if (showPageIndicator) MaterialTheme.colorScheme.primary else Color.White.copy(alpha = 0.5f),
+                        modifier = Modifier.size(18.dp)
+                    )
+                }
             }
         }
     }

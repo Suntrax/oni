@@ -167,8 +167,8 @@ fun MangaHomeCard(
     val progressText = when (listType) {
         "CURRENT" -> {
             when {
-                total > 0 -> "Ch. ${track.currentChapterNumber + 1} / $total"
-                else -> "Ch. ${track.currentChapterNumber + 1}"
+                total > 0 -> "Ch. ${track.currentChapterNumber} / $total"
+                else -> "Ch. ${track.currentChapterNumber}"
             }
         }
         "COMPLETED" -> if (total > 0) "$total ch" else "${track.currentChapterNumber} ch"
@@ -184,7 +184,7 @@ fun MangaHomeCard(
         Card(
             shape = RoundedCornerShape(14.dp),
             modifier = Modifier
-                .height(195.dp)
+                .height(210.dp)
                 .clip(RoundedCornerShape(14.dp))
                 .clickable { onClick() }
         ) {
@@ -234,21 +234,6 @@ fun MangaHomeCard(
                             maxLines = 1,
                             modifier = Modifier.padding(horizontal = 8.dp, vertical = 4.dp)
                         )
-                    }
-
-                    if (track.scrollProgress > 0f) {
-                        Surface(
-                            shape = RoundedCornerShape(8.dp),
-                            color = MaterialTheme.colorScheme.primary.copy(alpha = 0.85f)
-                        ) {
-                            Text(
-                                text = "${(track.scrollProgress * 100).toInt()}%",
-                                style = MaterialTheme.typography.labelSmall,
-                                color = Color.White,
-                                fontWeight = FontWeight.Bold,
-                                modifier = Modifier.padding(horizontal = 6.dp, vertical = 4.dp)
-                            )
-                        }
                     }
                 }
 
@@ -346,7 +331,7 @@ fun ResumeMangaCard(
                         color = Color.Black.copy(alpha = 0.65f)
                     ) {
                         Text(
-                            text = "Ch. ${maxOf(track.currentChapterNumber, 1)}",
+                            text = "Ch. ${track.currentChapterNumber + 1}",
                             style = MaterialTheme.typography.labelMedium,
                             color = Color.White,
                             fontWeight = FontWeight.Bold,
@@ -412,7 +397,7 @@ fun HomeScreen(
     onRemoveResumeTracking: (MangaTrack) -> Unit = {},
     onSearchClick: () -> Unit = {},
     onLoginClick: () -> Unit = {},
-    onMangaStatusChange: (MangaTrack, ReadingStatus, Int?) -> Unit = { _, _, _ -> }
+    onMangaStatusChange: (MangaTrack, ReadingStatus, Double?) -> Unit = { _, _, _ -> }
 ) {
     val continueReading by viewModel.continueReading.collectAsState()
     val resumeReading by viewModel.resumeReading.collectAsState()

@@ -786,8 +786,6 @@ class AniListManager(private val context: Context) {
             if (existing != null) {
                 val updated = existing.copy(
                     status = entry.toReadingStatus(),
-                    currentChapterNumber = entry.progress,
-                    currentChapterIndex = (entry.progress - 1).coerceAtLeast(0),
                     totalChapters = entry.chapters ?: existing.totalChapters,
                     lastReadTimestamp = System.currentTimeMillis(),
                     anilistMediaId = entry.mediaId,
@@ -800,7 +798,7 @@ class AniListManager(private val context: Context) {
                     title = entry.title,
                     coverUrl = entry.coverUrl,
                     currentChapterIndex = (entry.progress - 1).coerceAtLeast(0),
-                    currentChapterNumber = entry.progress,
+                    currentChapterNumber = entry.progress.toDouble(),
                     currentChapterUrl = "",
                     totalChapters = entry.chapters ?: 0,
                     status = entry.toReadingStatus(),

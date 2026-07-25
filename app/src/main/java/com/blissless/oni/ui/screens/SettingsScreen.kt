@@ -3,6 +3,13 @@ package com.blissless.oni.ui.screens
 import android.content.Intent
 import android.net.Uri
 import androidx.activity.compose.BackHandler
+import androidx.compose.animation.AnimatedContent
+import androidx.compose.animation.core.tween
+import androidx.compose.animation.fadeIn
+import androidx.compose.animation.fadeOut
+import androidx.compose.animation.slideInHorizontally
+import androidx.compose.animation.slideOutHorizontally
+import androidx.compose.animation.togetherWith
 import androidx.compose.foundation.background
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.Arrangement
@@ -20,10 +27,19 @@ import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.filled.AccountCircle
 import androidx.compose.material.icons.filled.CheckCircle
+import androidx.compose.material.icons.filled.DarkMode
 import androidx.compose.material.icons.filled.Download
 import androidx.compose.material.icons.filled.Error
+import androidx.compose.material.icons.filled.Explore
+import androidx.compose.material.icons.filled.FileDownload
+import androidx.compose.material.icons.filled.Home
 import androidx.compose.material.icons.filled.Info
+import androidx.compose.material.icons.filled.LightMode
+import androidx.compose.material.icons.filled.Palette
+import androidx.compose.material.icons.filled.Person
+import androidx.compose.material.icons.filled.Extension
 import androidx.compose.material.icons.filled.Settings
+import androidx.compose.material.icons.filled.Storage
 import androidx.compose.material.icons.filled.Sync
 import androidx.compose.material.icons.filled.Update
 import androidx.compose.material.icons.filled.Widgets
@@ -48,6 +64,11 @@ import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
 import androidx.compose.ui.graphics.Color
+import androidx.compose.ui.graphics.ImageBitmap
+import androidx.compose.ui.graphics.asImageBitmap
+import androidx.compose.ui.graphics.painter.BitmapPainter
+import androidx.compose.ui.graphics.painter.Painter
+import androidx.compose.ui.layout.ContentScale
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
@@ -60,63 +81,50 @@ import com.blissless.oni.update.UpdateViewModel
 import com.blissless.oni.viewmodel.MainViewModel
 import kotlin.math.roundToInt
 
-private sealed class SettingsNavRoute {
-    data object Main : SettingsNavRoute()
-    data object AccountSync : SettingsNavRoute()
-    data object Reader : SettingsNavRoute()
-    data object Appearance : SettingsNavRoute()
-    data object UpdatesAbout : SettingsNavRoute()
-    data object Extensions : SettingsNavRoute()
-}
-
 @Composable
 fun SettingsScreen(viewModel: MainViewModel) {
-    var currentRoute by remember { mutableStateOf<SettingsNavRoute>(SettingsNavRoute.Main) }
+    var selectedGroup by remember { mutableStateOf<String?>(null) }
 
-    BackHandler(enabled = currentRoute !is SettingsNavRoute.Main) {
-        currentRoute = SettingsNavRoute.Main
+    BackHandler(enabled = selectedGroup != null) {
+        selectedGroup = null
     }
 
-    when (currentRoute) {
-        is SettingsNavRoute.Main -> SettingsLandingPage(
-            groups = listOf(
-                SettingsGroup("account", "Account & Sync", "AniList login and sync", Icons.Default.AccountCircle),
-                SettingsGroup("reader", "Reader", "Reading mode and rotation", Icons.Default.Update),
-                SettingsGroup("appearance", "Appearance", "Theme and color settings", Icons.Default.Settings),
-                SettingsGroup("updates", "Updates & About", "App updates and version info", Icons.Default.Download),
-                SettingsGroup("extensions", "Extensions", "Manage manga source extensions", Icons.Default.Widgets),
-            ),
-            onGroupClick = { id ->
-                currentRoute = when (id) {
-                    "account" -> SettingsNavRoute.AccountSync
-                    "reader" -> SettingsNavRoute.Reader
-                    "appearance" -> SettingsNavRoute.Appearance
-                    "updates" -> SettingsNavRoute.UpdatesAbout
-                    "extensions" -> SettingsNavRoute.Extensions
-                    else -> SettingsNavRoute.Main
-                }
+    AnimatedContent(
+        targetState = selectedGroup,
+        transitionSpec = {
+            if (targetState == null) {
+                (fadeIn(animationSpec = tween(220)) + slideInHorizontally(animationSpec = tween(220)) { -it / 8 })
+                    .togetherWith(fadeOut(animationSpec = tween(220)) + slideOutHorizontally(animationSpec = tween(220)) { it / 8 })
+            } else {
+                (fadeIn(animationSpec = tween(220)) + slideInHorizontally(animationSpec = tween(220)))
+                    .togetherWith(fadeOut(animationSpec = tween(220)) + slideOutHorizontally(animationSpec = tween(220)))
             }
-        )
-        is SettingsNavRoute.AccountSync -> AccountSyncPage(
-            viewModel = viewModel,
-            onBack = { currentRoute = SettingsNavRoute.Main }
-        )
-        is SettingsNavRoute.Reader -> ReaderPage(
-            viewModel = viewModel,
-            onBack = { currentRoute = SettingsNavRoute.Main }
-        )
-        is SettingsNavRoute.Appearance -> AppearancePage(
-            viewModel = viewModel,
-            onBack = { currentRoute = SettingsNavRoute.Main }
-        )
-        is SettingsNavRoute.UpdatesAbout -> UpdatesAboutPage(
-            viewModel = viewModel,
-            onBack = { currentRoute = SettingsNavRoute.Main }
-        )
-        is SettingsNavRoute.Extensions -> ExtensionsPage(
-            viewModel = viewModel,
-            onBack = { currentRoute = SettingsNavRoute.Main }
-        )
+        },
+        label = "settingsNavigation"
+    ) { targetGroup ->
+        if (targetGroup == null) {
+            SettingsLandingPage(
+                groups = listOf(
+                    SettingsGroup("account", "Account & Sync", "AniList login and sync", Icons.Default.Person),
+                    SettingsGroup("appearance", "Appearance", "Theme, colors, and display options", Icons.Default.Palette),
+                    SettingsGroup("general", "General", "Startup screen and app behavior", Icons.Default.Settings),
+                    SettingsGroup("reader", "Reader", "Reading mode and display", Icons.Default.Update),
+                    SettingsGroup("extensions", "Extensions", "Manage manga source extensions", Icons.Default.Extension),
+                    SettingsGroup("updates", "Updates & About", "App updates and version info", Icons.Default.Info),
+                ),
+                onGroupClick = { selectedGroup = it }
+            )
+        } else {
+            BackHandler { selectedGroup = null }
+            when (targetGroup) {
+                "account" -> AccountSyncPage(viewModel = viewModel, onBack = { selectedGroup = null })
+                "appearance" -> AppearancePage(viewModel = viewModel, onBack = { selectedGroup = null })
+                "general" -> GeneralPage(viewModel = viewModel, onBack = { selectedGroup = null })
+                "reader" -> ReaderPage(viewModel = viewModel, onBack = { selectedGroup = null })
+                "extensions" -> ExtensionsPage(viewModel = viewModel, onBack = { selectedGroup = null })
+                "updates" -> UpdatesAboutPage(viewModel = viewModel, onBack = { selectedGroup = null })
+            }
+        }
     }
 }
 
@@ -273,67 +281,106 @@ private fun AccountSyncPage(viewModel: MainViewModel, onBack: () -> Unit) {
 @Composable
 private fun ReaderPage(viewModel: MainViewModel, onBack: () -> Unit) {
     val readerMode by viewModel.readerMode.collectAsState()
-    val lockReaderRotation by viewModel.lockReaderRotation.collectAsState()
+    val showPageIndicator by viewModel.showPageIndicator.collectAsState()
 
     SettingsPageScaffold(title = "Reader", onBack = onBack) {
-        SettingsSectionHeader("Reading Mode")
+        SettingsSectionHeader("READING MODE")
         SettingsCardGroup {
-            Column {
-                Text(
-                    "Choose how pages are laid out.",
-                    color = MaterialTheme.colorScheme.onSurfaceVariant.copy(alpha = 0.7f),
-                    style = MaterialTheme.typography.bodySmall
+            ReaderMode.entries.forEachIndexed { index, mode ->
+                SettingsRadioItem(
+                    selected = readerMode == mode,
+                    onClick = { viewModel.setReaderMode(mode) },
+                    icon = mode.icon,
+                    title = mode.displayLabel,
+                    description = mode.description
                 )
-                Spacer(modifier = Modifier.height(8.dp))
-                ReaderMode.entries.forEach { mode ->
-                    Row(
-                        modifier = Modifier
-                            .fillMaxWidth()
-                            .clickable { viewModel.setReaderMode(mode) }
-                            .padding(vertical = 8.dp),
-                        verticalAlignment = Alignment.CenterVertically
-                    ) {
-                        Box(
-                            modifier = Modifier
-                                .size(20.dp)
-                                .clip(RoundedCornerShape(10.dp))
-                                .background(
-                                    if (readerMode == mode) MaterialTheme.colorScheme.primary
-                                    else Color.Transparent
-                                )
-                                .then(
-                                    if (readerMode != mode) Modifier.background(Color.Transparent) else Modifier
-                                ),
-                            contentAlignment = Alignment.Center
-                        ) {
-                            if (readerMode == mode) {
-                                Icon(
-                                    Icons.Default.CheckCircle,
-                                    contentDescription = null,
-                                    tint = Color.White,
-                                    modifier = Modifier.size(12.dp)
-                                )
-                            }
-                        }
-                        Spacer(modifier = Modifier.width(12.dp))
-                        Column(modifier = Modifier.weight(1f)) {
-                            Text(mode.displayLabel, fontWeight = FontWeight.Medium)
-                            Text(
-                                text = when (mode) {
-                                    ReaderMode.VERTICAL_SCROLL -> "Webtoon-style continuous scroll"
-                                    ReaderMode.LEFT_TO_RIGHT -> "One page per screen, swipe left"
-                                    ReaderMode.RIGHT_TO_LEFT -> "One page per screen, swipe right (manga)"
-                                },
-                                color = MaterialTheme.colorScheme.onSurfaceVariant.copy(alpha = 0.7f),
-                                style = MaterialTheme.typography.bodySmall
-                            )
-                        }
-                    }
+                if (index < ReaderMode.entries.lastIndex) {
+                    HorizontalDivider(
+                        modifier = Modifier.padding(start = 54.dp),
+                        color = MaterialTheme.colorScheme.outlineVariant.copy(alpha = 0.15f),
+                        thickness = 0.5.dp
+                    )
                 }
             }
         }
 
-        SettingsSectionHeader("Rotation")
+        SettingsSectionHeader("DISPLAY")
+        SettingsCardGroup {
+            SettingsToggle(
+                title = "Page Indicator",
+                description = "Show current page number in the bottom-right corner while reading.",
+                checked = showPageIndicator,
+                onCheckedChange = { viewModel.setShowPageIndicator(it) }
+            )
+        }
+    }
+}
+
+@Composable
+private fun AppearancePage(viewModel: MainViewModel, onBack: () -> Unit) {
+    val currentThemeMode by viewModel.themeMode.collectAsState()
+    val monochromeTheme by viewModel.monochromeTheme.collectAsState()
+    val lockReaderRotation by viewModel.lockReaderRotation.collectAsState()
+
+    SettingsPageScaffold(title = "Appearance", onBack = onBack) {
+        SettingsSectionHeader("THEME MODE")
+        SettingsCardGroup {
+            SettingsRadioItem(
+                selected = currentThemeMode == com.blissless.oni.ui.theme.ThemeMode.SYSTEM,
+                onClick = { viewModel.setThemeMode(com.blissless.oni.ui.theme.ThemeMode.SYSTEM) },
+                icon = Icons.Default.Settings,
+                title = "System Theme",
+                description = "Follow your device theme setting"
+            )
+            HorizontalDivider(
+                modifier = Modifier.padding(start = 54.dp),
+                color = MaterialTheme.colorScheme.outlineVariant.copy(alpha = 0.15f),
+                thickness = 0.5.dp
+            )
+            SettingsRadioItem(
+                selected = currentThemeMode == com.blissless.oni.ui.theme.ThemeMode.LIGHT,
+                onClick = { viewModel.setThemeMode(com.blissless.oni.ui.theme.ThemeMode.LIGHT) },
+                icon = Icons.Default.LightMode,
+                title = "Light",
+                description = "Bright and clean appearance"
+            )
+            HorizontalDivider(
+                modifier = Modifier.padding(start = 54.dp),
+                color = MaterialTheme.colorScheme.outlineVariant.copy(alpha = 0.15f),
+                thickness = 0.5.dp
+            )
+            SettingsRadioItem(
+                selected = currentThemeMode == com.blissless.oni.ui.theme.ThemeMode.DARK,
+                onClick = { viewModel.setThemeMode(com.blissless.oni.ui.theme.ThemeMode.DARK) },
+                icon = Icons.Default.DarkMode,
+                title = "Dark",
+                description = "Easy on the eyes at night"
+            )
+            HorizontalDivider(
+                modifier = Modifier.padding(start = 54.dp),
+                color = MaterialTheme.colorScheme.outlineVariant.copy(alpha = 0.15f),
+                thickness = 0.5.dp
+            )
+            SettingsRadioItem(
+                selected = currentThemeMode == com.blissless.oni.ui.theme.ThemeMode.OLED,
+                onClick = { viewModel.setThemeMode(com.blissless.oni.ui.theme.ThemeMode.OLED) },
+                icon = Icons.Default.Storage,
+                title = "OLED",
+                description = "Pure black for AMOLED screens"
+            )
+        }
+
+        SettingsSectionHeader("COLORS")
+        SettingsCardGroup {
+            SettingsToggle(
+                title = "Monochrome Theme",
+                description = "Disable Material You colors for neutral appearance",
+                checked = monochromeTheme,
+                onCheckedChange = { viewModel.setMonochromeTheme(it) }
+            )
+        }
+
+        SettingsSectionHeader("DISPLAY")
         SettingsCardGroup {
             SettingsToggle(
                 title = "Lock Rotation",
@@ -346,31 +393,42 @@ private fun ReaderPage(viewModel: MainViewModel, onBack: () -> Unit) {
 }
 
 @Composable
-private fun AppearancePage(viewModel: MainViewModel, onBack: () -> Unit) {
-    val useMaterial3Color by viewModel.useMaterial3Color.collectAsState()
-    val monochromeTheme by viewModel.monochromeTheme.collectAsState()
-    val oledTheme by viewModel.oledTheme.collectAsState()
+private fun GeneralPage(viewModel: MainViewModel, onBack: () -> Unit) {
+    val startupScreen by viewModel.startupScreen.collectAsState()
 
-    SettingsPageScaffold(title = "Appearance", onBack = onBack) {
-        SettingsSectionHeader("Theme")
+    SettingsPageScaffold(title = "General", onBack = onBack) {
+        SettingsSectionHeader("LAUNCH")
         SettingsCardGroup {
-            SettingsToggle(
-                title = "Material 3 Color",
-                description = "Use wallpaper-based dynamic colors from your device theme.",
-                checked = useMaterial3Color,
-                onCheckedChange = { viewModel.setMaterial3Color(it) }
+            SettingsRadioItem(
+                selected = startupScreen == "home",
+                onClick = { viewModel.setStartupScreen("home") },
+                icon = Icons.Default.Home,
+                title = "Home",
+                description = "Your manga lists and reading progress"
             )
-            SettingsToggle(
-                title = "Monochrome",
-                description = "Grayscale theme without any accent colors.",
-                checked = monochromeTheme,
-                onCheckedChange = { viewModel.setMonochromeTheme(it) }
+            HorizontalDivider(
+                modifier = Modifier.padding(start = 54.dp),
+                color = MaterialTheme.colorScheme.outlineVariant.copy(alpha = 0.15f),
+                thickness = 0.5.dp
             )
-            SettingsToggle(
-                title = "Pure Black (OLED)",
-                description = "True black background for OLED screens. Saves battery.",
-                checked = oledTheme,
-                onCheckedChange = { viewModel.setOledTheme(it) }
+            SettingsRadioItem(
+                selected = startupScreen == "explore",
+                onClick = { viewModel.setStartupScreen("explore") },
+                icon = Icons.Default.Explore,
+                title = "Explore",
+                description = "Browse and discover manga"
+            )
+            HorizontalDivider(
+                modifier = Modifier.padding(start = 54.dp),
+                color = MaterialTheme.colorScheme.outlineVariant.copy(alpha = 0.15f),
+                thickness = 0.5.dp
+            )
+            SettingsRadioItem(
+                selected = startupScreen == "downloads",
+                onClick = { viewModel.setStartupScreen("downloads") },
+                icon = Icons.Default.FileDownload,
+                title = "Downloads",
+                description = "Downloaded chapters"
             )
         }
     }
@@ -445,6 +503,27 @@ private fun UpdatesAboutPage(viewModel: MainViewModel, onBack: () -> Unit) {
 }
 
 @Composable
+private fun extensionIconPainter(packageName: String): Painter? {
+    val context = LocalContext.current
+    val bitmap = remember(packageName) {
+        try {
+            val appInfo = context.packageManager.getApplicationInfo(packageName, 0)
+            val drawable = context.packageManager.getApplicationIcon(appInfo)
+            val bmp = android.graphics.Bitmap.createBitmap(
+                drawable.intrinsicWidth.coerceAtLeast(1),
+                drawable.intrinsicHeight.coerceAtLeast(1),
+                android.graphics.Bitmap.Config.ARGB_8888
+            )
+            val canvas = android.graphics.Canvas(bmp)
+            drawable.setBounds(0, 0, canvas.width, canvas.height)
+            drawable.draw(canvas)
+            bmp
+        } catch (_: Exception) { null }
+    }
+    return bitmap?.let { BitmapPainter(it.asImageBitmap()) }
+}
+
+@Composable
 private fun ExtensionsPage(viewModel: MainViewModel, onBack: () -> Unit) {
     val extensions by viewModel.installedExtensions.collectAsState()
     val selectedExtensionAuthority by viewModel.selectedExtensionAuthority.collectAsState()
@@ -498,6 +577,7 @@ private fun ExtensionsPage(viewModel: MainViewModel, onBack: () -> Unit) {
                         Spacer(modifier = Modifier.height(8.dp))
                         extensions.forEach { ext ->
                             val isSelected = ext.authority == selectedExtensionAuthority
+                            val painter = extensionIconPainter(ext.packageName)
                             HorizontalDivider(color = MaterialTheme.colorScheme.outlineVariant.copy(alpha = 0.3f))
                             Row(
                                 modifier = Modifier
@@ -516,12 +596,23 @@ private fun ExtensionsPage(viewModel: MainViewModel, onBack: () -> Unit) {
                                         .background(if (isSelected) MaterialTheme.colorScheme.primary.copy(alpha = 0.25f) else MaterialTheme.colorScheme.primary.copy(alpha = 0.08f)),
                                     contentAlignment = Alignment.Center
                                 ) {
-                                    Icon(
-                                        if (isSelected) Icons.Default.CheckCircle else Icons.Default.Widgets,
-                                        contentDescription = null,
-                                        tint = if (isSelected) Color(0xFF10B981) else MaterialTheme.colorScheme.primary,
-                                        modifier = Modifier.size(22.dp)
-                                    )
+                                    if (painter != null) {
+                                        androidx.compose.foundation.Image(
+                                            painter = painter,
+                                            contentDescription = ext.label,
+                                            modifier = Modifier
+                                                .size(36.dp)
+                                                .clip(RoundedCornerShape(10.dp)),
+                                            contentScale = ContentScale.Crop
+                                        )
+                                    } else {
+                                        Icon(
+                                            Icons.Default.Widgets,
+                                            contentDescription = null,
+                                            tint = MaterialTheme.colorScheme.primary,
+                                            modifier = Modifier.size(22.dp)
+                                        )
+                                    }
                                 }
                                 Spacer(modifier = Modifier.width(12.dp))
                                 Column(modifier = Modifier.weight(1f)) {

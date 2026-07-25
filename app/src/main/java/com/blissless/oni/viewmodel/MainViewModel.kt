@@ -23,6 +23,7 @@ import com.blissless.oni.data.ReaderMode
 import com.blissless.oni.data.ReadingStatus
 import com.blissless.oni.data.SettingsManager
 import com.blissless.oni.data.TrackingManager
+import com.blissless.oni.ui.theme.ThemeMode
 import com.blissless.oni.update.GitHubRelease
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.Job
@@ -160,6 +161,9 @@ class MainViewModel(private val context: Context) : ViewModel() {
     private var currentMangaUrl: String? = null
     private var currentMediaId: Int? = null
 
+    private val _mangaTitle = MutableStateFlow<String>("")
+    val mangaTitle: StateFlow<String> = _mangaTitle.asStateFlow()
+
     // AniList state
     private val _anilistUsername = MutableStateFlow<String?>(null)
     val anilistUsername: StateFlow<String?> = _anilistUsername.asStateFlow()
@@ -234,6 +238,24 @@ class MainViewModel(private val context: Context) : ViewModel() {
         _lockReaderRotation.value = enabled
     }
 
+    // Show page indicator in reader
+    private val _showPageIndicator = MutableStateFlow(settingsManager.getShowPageIndicator())
+    val showPageIndicator: StateFlow<Boolean> = _showPageIndicator.asStateFlow()
+
+    fun setShowPageIndicator(enabled: Boolean) {
+        settingsManager.setShowPageIndicator(enabled)
+        _showPageIndicator.value = enabled
+    }
+
+    // Startup screen
+    private val _startupScreen = MutableStateFlow(settingsManager.getStartupScreen())
+    val startupScreen: StateFlow<String> = _startupScreen.asStateFlow()
+
+    fun setStartupScreen(screen: String) {
+        settingsManager.setStartupScreen(screen)
+        _startupScreen.value = screen
+    }
+
     // Material 3 dynamic color
     private val _useMaterial3Color = MutableStateFlow(settingsManager.getMaterial3Color())
     val useMaterial3Color: StateFlow<Boolean> = _useMaterial3Color.asStateFlow()
@@ -252,13 +274,13 @@ class MainViewModel(private val context: Context) : ViewModel() {
         _monochromeTheme.value = enabled
     }
 
-    // OLED theme
-    private val _oledTheme = MutableStateFlow(settingsManager.getOledTheme())
-    val oledTheme: StateFlow<Boolean> = _oledTheme.asStateFlow()
+    // Theme mode (system/light/dark/oled)
+    private val _themeMode = MutableStateFlow(ThemeMode.fromValue(settingsManager.getThemeMode()))
+    val themeMode: StateFlow<ThemeMode> = _themeMode.asStateFlow()
 
-    fun setOledTheme(enabled: Boolean) {
-        settingsManager.setOledTheme(enabled)
-        _oledTheme.value = enabled
+    fun setThemeMode(mode: ThemeMode) {
+        settingsManager.setThemeMode(mode.value)
+        _themeMode.value = mode
     }
 
     fun selectExtension(authority: String?) {
@@ -368,7 +390,7 @@ class MainViewModel(private val context: Context) : ViewModel() {
     fun refreshTrackingLists() {
         val allReading = trackingManager.getContinueReading()
         _resumeReading.value = allReading.filter { it.scrollProgress > 0f }
-        _continueReading.value = allReading.filter { it.scrollProgress == 0f && it.currentChapterNumber > 0 }
+        _continueReading.value = allReading.filter { it.currentChapterNumber > 0 }
         _planningToRead.value = trackingManager.getPlanningToRead()
     }
 
@@ -446,12 +468,14 @@ class MainViewModel(private val context: Context) : ViewModel() {
         return trackingManager.getMangaTracking(mangaId)
     }
 
-    fun updateTrackingStatus(mangaId: String, status: ReadingStatus) {
+    fun updateTrackingStatus(mangaId: String, status: ReadingStatus, chapterNumber: Double? = null) {
         val existing = resolveMangaTracking(mangaId)
         if (existing != null) {
             val updated = existing.copy(
                 status = status,
-                lastReadTimestamp = System.currentTimeMillis()
+                lastReadTimestamp = System.currentTimeMillis(),
+                currentChapterNumber = chapterNumber ?: existing.currentChapterNumber,
+                currentChapterIndex = if (chapterNumber != null) (chapterNumber - 1).coerceAtLeast(0.0).toInt() else existing.currentChapterIndex
             )
             trackingManager.updateTracking(updated)
             updateAnilistProgressNow(updated)
@@ -460,12 +484,13 @@ class MainViewModel(private val context: Context) : ViewModel() {
             if (updated.totalChapters <= 0) refreshMangaDexChapterCountForTrack(updated)
         } else {
             val detail = _mangaDetail.value
+            val resolvedChapter = chapterNumber ?: 0.0
             val track = MangaTrack(
                 mangaId = mangaId,
                 title = currentMangaTitle ?: "",
                 coverUrl = currentMangaCoverUrl,
-                currentChapterIndex = 0,
-                currentChapterNumber = 0,
+                currentChapterIndex = (resolvedChapter - 1.0).coerceAtLeast(0.0).toInt(),
+                currentChapterNumber = resolvedChapter,
                 currentChapterUrl = "",
                 totalChapters = detail?.chapters ?: 0,
                 status = status,
@@ -499,6 +524,7 @@ class MainViewModel(private val context: Context) : ViewModel() {
         val mangaId = "anilist_${manga.id}"
         currentMangaId = mangaId
         currentMangaTitle = manga.title
+        _mangaTitle.value = manga.title
         currentMangaCoverUrl = manga.coverUrl
         currentMangaUrl = "https://anilist.co/manga/${manga.id}"
         currentMediaId = manga.id
@@ -519,6 +545,7 @@ class MainViewModel(private val context: Context) : ViewModel() {
         if (mediaId != null) {
             currentMangaId = manga.mangaId
             currentMangaTitle = manga.title
+            _mangaTitle.value = manga.title
             currentMangaCoverUrl = manga.coverUrl
             currentMangaUrl = "https://anilist.co/manga/$mediaId"
             currentMediaId = mediaId
@@ -535,6 +562,7 @@ class MainViewModel(private val context: Context) : ViewModel() {
             // Legacy tracking data without AniList ID - try looking up by title
             currentMangaId = manga.mangaId
             currentMangaTitle = manga.title
+            _mangaTitle.value = manga.title
             currentMangaCoverUrl = manga.coverUrl
             currentMangaUrl = manga.url
             log("WARN", "No AniList media ID for ${manga.title}, attempting search lookup")
@@ -811,6 +839,7 @@ class MainViewModel(private val context: Context) : ViewModel() {
         currentMediaId = mediaId
         currentMangaId = track.mangaId
         currentMangaTitle = track.title
+        _mangaTitle.value = track.title
         currentMangaCoverUrl = track.coverUrl
         currentMangaUrl = track.mangaUrl
         // Seed the MangaDex UUID cache from the persisted track so we skip the
@@ -850,9 +879,7 @@ class MainViewModel(private val context: Context) : ViewModel() {
             }
 
             if (currentPosition < 0 && track.currentChapterNumber > 0) {
-                currentPosition = chapterList.indexOfFirst { ch ->
-                    ch.title?.contains(track.currentChapterNumber.toString()) == true
-                }
+                currentPosition = findChapterByNumber(chapterList, track.currentChapterNumber)
             }
 
             if (currentPosition < 0) {
@@ -860,10 +887,10 @@ class MainViewModel(private val context: Context) : ViewModel() {
             }
 
             val safeChapterIndex = currentPosition.coerceIn(0, chapterList.lastIndex.coerceAtLeast(0))
-            val nextToRead = if (track.currentChapterNumber > 0) safeChapterIndex + 1 else 0
+            val nextToRead = safeChapterIndex + 1
 
             _readChapterIndices.value = (0 until safeChapterIndex).toSet()
-            _nextChapterToRead.value = nextToRead + 1
+            _nextChapterToRead.value = nextToRead
 
             val chapter = chapterList.getOrNull(nextToRead)
             if (chapter != null) {
@@ -890,10 +917,9 @@ class MainViewModel(private val context: Context) : ViewModel() {
         currentMediaId = mediaId
         currentMangaId = track.mangaId
         currentMangaTitle = track.title
+        _mangaTitle.value = track.title
         currentMangaCoverUrl = track.coverUrl
         currentMangaUrl = track.mangaUrl
-        // Seed the MangaDex UUID cache from the persisted track so we skip the
-        // title-search lookup if we already resolved it on a previous open.
         currentMangaDexId = track.mangaDexId
         track.mangaDexVolumeCount?.let { _mangaDexVolumeCount.value = it }
         _selectedChapterIndex.value = -1
@@ -918,7 +944,22 @@ class MainViewModel(private val context: Context) : ViewModel() {
             _chapters.value = chapterList
             trackingManager.updateTotalChapters(track.mangaId, totalChapters)
 
-            val safeIndex = (track.currentChapterIndex + 1).coerceIn(0, chapterList.lastIndex.coerceAtLeast(0))
+            val savedUrl = track.currentChapterUrl
+            var currentPosition = -1
+
+            if (savedUrl.isNotBlank()) {
+                currentPosition = chapterList.indexOfFirst { it.url == savedUrl }
+            }
+
+            if (currentPosition < 0 && track.currentChapterNumber > 0) {
+                currentPosition = findChapterByNumber(chapterList, track.currentChapterNumber)
+            }
+
+            if (currentPosition < 0) {
+                currentPosition = track.currentChapterIndex.coerceIn(0, chapterList.lastIndex.coerceAtLeast(0))
+            }
+
+            val safeIndex = currentPosition.coerceIn(0, chapterList.lastIndex.coerceAtLeast(0))
             val chapter = chapterList.getOrNull(safeIndex)
             if (chapter != null) {
                 _selectedChapterIndex.value = safeIndex
@@ -941,21 +982,38 @@ class MainViewModel(private val context: Context) : ViewModel() {
         _chapterImages.value = UiState.Idle
 
         val tracking = trackingManager.getMangaTracking(mangaId)
-        val savedIndex = if (tracking?.status == ReadingStatus.READING) {
-            tracking.currentChapterIndex
-        } else {
-            0
-        }
-        val nextChapterIndex = if (tracking != null && tracking.scrollProgress == 0f && savedIndex >= 0) {
-            savedIndex + 1
-        } else if (savedIndex > 0) {
-            savedIndex + 1
-        } else {
-            0
+
+        fun resolveNextIndex(chapterList: List<ChapterInfo>): Int {
+            if (chapterList.isEmpty()) return 0
+            if (tracking == null || tracking.status != ReadingStatus.READING) return 0
+
+            val savedUrl = tracking.currentChapterUrl
+            var currentPosition = -1
+
+            if (savedUrl.isNotBlank()) {
+                currentPosition = chapterList.indexOfFirst { it.url == savedUrl }
+            }
+
+            if (currentPosition < 0 && tracking.currentChapterNumber > 0) {
+                currentPosition = findChapterByNumber(chapterList, tracking.currentChapterNumber)
+            }
+
+            if (currentPosition < 0) {
+                currentPosition = tracking.currentChapterIndex.coerceIn(0, chapterList.lastIndex.coerceAtLeast(0))
+            }
+
+            return if (tracking.scrollProgress == 0f && currentPosition >= 0) {
+                currentPosition + 1
+            } else if (currentPosition > 0) {
+                currentPosition + 1
+            } else {
+                0
+            }
         }
 
         val chapterList = _chapters.value
         if (chapterList.isNotEmpty()) {
+            val nextChapterIndex = resolveNextIndex(chapterList)
             val safeChapterIndex = nextChapterIndex.coerceIn(0, chapterList.lastIndex.coerceAtLeast(0))
             _readChapterIndices.value = (0 until safeChapterIndex).toSet()
             _nextChapterToRead.value = safeChapterIndex
@@ -976,6 +1034,7 @@ class MainViewModel(private val context: Context) : ViewModel() {
             val chapters = resolveChapterList(mediaId, mangaId)
             _chapters.value = chapters
 
+            val nextChapterIndex = resolveNextIndex(chapters)
             val safeChapterIndex = nextChapterIndex.coerceIn(0, chapters.lastIndex.coerceAtLeast(0))
             _readChapterIndices.value = (0 until safeChapterIndex).toSet()
             _nextChapterToRead.value = safeChapterIndex
@@ -995,6 +1054,7 @@ class MainViewModel(private val context: Context) : ViewModel() {
             val mangaId = "anilist_$mediaId"
             currentMangaId = mangaId
             currentMangaTitle = detail.titleRomaji
+            _mangaTitle.value = detail.titleRomaji
             currentMangaCoverUrl = detail.coverExtraLarge ?: detail.coverLarge
 
             val existingTracking = trackingManager.getMangaTracking(mangaId)
@@ -1088,6 +1148,66 @@ class MainViewModel(private val context: Context) : ViewModel() {
 
     // ======================== Scroll Progress & Tracking ========================
 
+    /**
+     * Detect whether a chapter title represents a partial chapter (e.g. "Chapter 58.5").
+     */
+    private fun isPartialChapter(chapter: ChapterInfo): Boolean {
+        val title = chapter.title ?: return false
+        val numStr = title.removePrefix("Chapter ").removePrefix("Ch. ").substringBefore(":").trim()
+        return numStr.contains(".")
+    }
+
+    /**
+     * Parse the chapter number from a [ChapterInfo] title as a [Double].
+     *
+     * Examples: "Chapter 58" → 58.0, "Chapter 58.5: Title" → 58.5, "Ch. 102" → 102.0
+     * Returns 0.0 if parsing fails.
+     */
+    private fun parseChapterNumberDouble(chapter: ChapterInfo): Double {
+        val title = chapter.title ?: return 0.0
+        val numStr = title.removePrefix("Chapter ").removePrefix("Ch. ").substringBefore(":").trim()
+        return numStr.toDoubleOrNull() ?: 0.0
+    }
+
+    /**
+     * Find the index of a chapter in [chapters] whose parsed number matches [target].
+     *
+     * Strategy:
+     *  1. Exact match (target == parsed number)
+     *  2. Floor match (closest chapter with number ≤ target, preferring non-partial)
+     *  3. -1 if nothing found
+     *
+     * This handles extension switching gracefully: if the new extension lacks
+     * partial chapters (e.g. no 58.5), it falls back to the nearest full chapter (58.0).
+     */
+    private fun findChapterByNumber(chapters: List<ChapterInfo>, target: Double): Int {
+        if (chapters.isEmpty() || target <= 0.0) return -1
+
+        // Exact match
+        val exactIndex = chapters.indexOfFirst { parseChapterNumberDouble(it) == target }
+        if (exactIndex >= 0) return exactIndex
+
+        // Floor match: closest chapter with number ≤ target, preferring non-partial
+        var bestIndex = -1
+        var bestNumber = Double.NEGATIVE_INFINITY
+        for (i in chapters.indices) {
+            val num = parseChapterNumberDouble(chapters[i])
+            if (num <= target && num > bestNumber) {
+                bestNumber = num
+                bestIndex = i
+            }
+        }
+        return bestIndex
+    }
+
+    /**
+     * Compute the AniList chapter number for a given chapter index.
+     * AniList number = position in the list (1-based).
+     */
+    private fun computeAnilistChapterNumber(index: Int): Int {
+        return index + 1
+    }
+
     fun onChapterScrollProgress(scrollPercent: Float) {
         val threshold = _anilistSyncThreshold.value / 100f
         if (_selectedChapterIndex.value < 0) return
@@ -1096,7 +1216,8 @@ class MainViewModel(private val context: Context) : ViewModel() {
         currentMangaId?.let { mangaId ->
             val chapter = _chapters.value.getOrNull(_selectedChapterIndex.value)
             if (chapter != null) {
-                val chapterNumber = _selectedChapterIndex.value + 1
+                val chapterNumber = parseChapterNumberDouble(chapter)
+                val anilistChapterNumber = computeAnilistChapterNumber(_selectedChapterIndex.value)
                 val existing = trackingManager.getMangaTracking(mangaId)
 
                 if (existing == null) {
@@ -1118,31 +1239,37 @@ class MainViewModel(private val context: Context) : ViewModel() {
                     trackingManager.updateTracking(track)
                     log("TRACK", "Created tracking for chapter ${_selectedChapterIndex.value} at $scrollPercent")
                 } else {
-                    // If this chapter was already marked as read (threshold was
-                    // previously crossed), do NOT overwrite the persisted state.
-                    // Scrolling back after finishing a chapter should not corrupt
-                    // the tracking entry or create a "resume reading" entry.
                     if (_selectedChapterIndex.value !in _readChapterIndices.value) {
                         trackingManager.updateScrollProgress(mangaId, scrollPercent)
                     }
                 }
 
                 if (scrollPercent >= threshold) {
-                    val trackForUpdate = trackingManager.getMangaTracking(mangaId)
-                    if (trackForUpdate == null || trackForUpdate.currentChapterIndex != _selectedChapterIndex.value || trackForUpdate.currentChapterNumber < 0) {
-                        trackingManager.updateChapterProgress(mangaId, _selectedChapterIndex.value, chapterNumber, chapter.url)
-                        log("TRACK", "Updated to chapter ${_selectedChapterIndex.value}")
-                    } else {
-                        trackingManager.resetScrollProgress(mangaId)
-                    }
-                    _isChapterRead.value = true
-                    _readChapterIndices.value = _readChapterIndices.value + _selectedChapterIndex.value
-                    _nextChapterToRead.value = _selectedChapterIndex.value + 1
+                    val alreadyRead = _selectedChapterIndex.value in _readChapterIndices.value
+                    val partial = isPartialChapter(chapter)
 
-                    val tracking = trackingManager.getMangaTracking(mangaId)
-                    if (tracking != null) {
-                        scheduleAnilistProgressUpdate(tracking)
+                    if (!alreadyRead) {
+                        val trackForUpdate = trackingManager.getMangaTracking(mangaId)
+                        if (trackForUpdate == null || trackForUpdate.currentChapterIndex != _selectedChapterIndex.value || trackForUpdate.currentChapterNumber < 0) {
+                            trackingManager.updateChapterProgress(mangaId, _selectedChapterIndex.value, chapterNumber, chapter.url)
+                            log("TRACK", "Updated to chapter ${_selectedChapterIndex.value} (num=$chapterNumber)")
+                        } else {
+                            trackingManager.resetScrollProgress(mangaId)
+                        }
+                        _readChapterIndices.value = _readChapterIndices.value + _selectedChapterIndex.value
+
+                        if (!partial) {
+                            val tracking = trackingManager.getMangaTracking(mangaId)
+                            if (tracking != null) {
+                                scheduleAnilistProgressUpdate(tracking)
+                            }
+                        } else {
+                            log("TRACK", "Skipping AniList sync for partial chapter $chapterNumber")
+                        }
                     }
+
+                    _isChapterRead.value = true
+                    _nextChapterToRead.value = (_nextChapterToRead.value ?: 0).coerceAtLeast(_selectedChapterIndex.value + 1)
                 }
 
                 refreshTrackingLists()
@@ -1154,7 +1281,7 @@ class MainViewModel(private val context: Context) : ViewModel() {
         currentMangaId?.let { mangaId ->
             val chapter = _chapters.value.getOrNull(_selectedChapterIndex.value)
             if (chapter != null) {
-                val chapterNumber = _selectedChapterIndex.value + 1
+                val chapterNumber = parseChapterNumberDouble(chapter)
                 val existing = trackingManager.getMangaTracking(mangaId)
                 if (existing == null) {
                     val track = MangaTrack(
@@ -1203,7 +1330,7 @@ class MainViewModel(private val context: Context) : ViewModel() {
             ReadingStatus.ON_HOLD -> "PAUSED"
             ReadingStatus.DROPPED -> "DROPPED"
         }
-        val safeProgress = maxOf(track.currentChapterNumber, 0)
+        val safeProgress = maxOf(track.currentChapterIndex + 1, 0)
         viewModelScope.launch {
             val result = anilistManager.updateMediaListEntry(mediaId, safeProgress, anilistStatus)
             result.fold(
@@ -1323,6 +1450,7 @@ class MainViewModel(private val context: Context) : ViewModel() {
         _chapters.value = emptyList()
         _selectedChapterIndex.value = -1
         _chapterImages.value = UiState.Idle
+        refreshTrackingLists()
     }
 
     /**
@@ -1662,7 +1790,7 @@ class MainViewModel(private val context: Context) : ViewModel() {
                         ReadingStatus.ON_HOLD -> "PAUSED"
                         ReadingStatus.DROPPED -> "DROPPED"
                     }
-                    anilistManager.updateMediaListEntry(mediaId, track.currentChapterNumber, anilistStatus)
+                    anilistManager.updateMediaListEntry(mediaId, track.currentChapterIndex + 1, anilistStatus)
                 }
             }
         }
@@ -1730,13 +1858,13 @@ class MainViewModel(private val context: Context) : ViewModel() {
 
     // ======================== Manual Progress & Settings ========================
 
-    fun setManualChapterProgress(chapterNumber: Int) {
+    fun setManualChapterProgress(chapterNumber: Double) {
         val mangaId = currentMangaId ?: return
         val totalChs = _chapters.value.size.coerceAtLeast(_mangaDetail.value?.chapters ?: 0)
             .let { if (it <= 0) Int.MAX_VALUE else it }
-        val clamped = chapterNumber.coerceAtMost(totalChs)
+        val clamped = chapterNumber.coerceAtMost(totalChs.toDouble())
         val existing = trackingManager.getMangaTracking(mangaId)
-        val chapterIndex = (clamped - 1).coerceAtLeast(0)
+        val chapterIndex = (clamped - 1.0).coerceAtLeast(0.0).toInt()
         if (existing != null) {
             val updated = existing.copy(
                 currentChapterIndex = chapterIndex,

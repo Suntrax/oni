@@ -2,6 +2,11 @@ package com.blissless.oni.data
 
 import android.content.Context
 import android.content.SharedPreferences
+import androidx.compose.material.icons.Icons
+import androidx.compose.material.icons.automirrored.filled.ArrowBack
+import androidx.compose.material.icons.automirrored.filled.ArrowForward
+import androidx.compose.material.icons.filled.ViewAgenda
+import androidx.compose.ui.graphics.vector.ImageVector
 
 class SettingsManager(context: Context) {
 
@@ -16,7 +21,9 @@ class SettingsManager(context: Context) {
         private const val KEY_LOCK_READER_ROTATION = "lock_reader_rotation"
         private const val KEY_MATERIAL3_COLOR = "material3_color"
         private const val KEY_MONOCHROME_THEME = "monochrome_theme"
-        private const val KEY_OLED_THEME = "oled_theme"
+        private const val KEY_THEME_MODE = "theme_mode"
+        private const val KEY_SHOW_PAGE_INDICATOR = "show_page_indicator"
+        private const val KEY_STARTUP_SCREEN = "startup_screen"
         private const val DEFAULT_SYNC_THRESHOLD = 90
     }
 
@@ -44,15 +51,6 @@ class SettingsManager(context: Context) {
         prefs.edit().putString(KEY_SELECTED_EXTENSION, authority).apply()
     }
 
-    /**
-     * Reader layout mode:
-     *  - "vertical"      : webtoon-style continuous vertical scroll (default, original behaviour)
-     *  - "left_to_right" : one page per screen, swipe left → next page (Mihon default for LTR languages)
-     *  - "right_to_left" : one page per screen, swipe right → next page (Mihon default for manga / RTL)
-     *
-     * The string is stored as a small ordinal-free identifier so future versions
-     * can rename or reorder the enum without breaking existing installs.
-     */
     fun getReaderMode(): ReaderMode {
         return when (prefs.getString(KEY_READER_MODE, ReaderMode.VERTICAL_SCROLL.storageKey)) {
             ReaderMode.LEFT_TO_RIGHT.storageKey -> ReaderMode.LEFT_TO_RIGHT
@@ -74,7 +72,7 @@ class SettingsManager(context: Context) {
     }
 
     fun getMaterial3Color(): Boolean {
-        return prefs.getBoolean(KEY_MATERIAL3_COLOR, false)
+        return prefs.getBoolean(KEY_MATERIAL3_COLOR, true)
     }
 
     fun setMaterial3Color(enabled: Boolean) {
@@ -89,31 +87,38 @@ class SettingsManager(context: Context) {
         prefs.edit().putBoolean(KEY_MONOCHROME_THEME, enabled).apply()
     }
 
-    fun getOledTheme(): Boolean {
-        return prefs.getBoolean(KEY_OLED_THEME, false)
+    fun getThemeMode(): String {
+        return prefs.getString(KEY_THEME_MODE, "dark") ?: "dark"
     }
 
-    fun setOledTheme(enabled: Boolean) {
-        prefs.edit().putBoolean(KEY_OLED_THEME, enabled).apply()
+    fun setThemeMode(mode: String) {
+        prefs.edit().putString(KEY_THEME_MODE, mode).apply()
+    }
+
+    fun getShowPageIndicator(): Boolean {
+        return prefs.getBoolean(KEY_SHOW_PAGE_INDICATOR, true)
+    }
+
+    fun setShowPageIndicator(enabled: Boolean) {
+        prefs.edit().putBoolean(KEY_SHOW_PAGE_INDICATOR, enabled).apply()
+    }
+
+    fun getStartupScreen(): String {
+        return prefs.getString(KEY_STARTUP_SCREEN, "home") ?: "home"
+    }
+
+    fun setStartupScreen(screen: String) {
+        prefs.edit().putString(KEY_STARTUP_SCREEN, screen).apply()
     }
 }
 
-/**
- * The three reading layouts supported by the reader screen.
- *
- * - VERTICAL_SCROLL: continuous webtoon-style scrolling, one column of images
- *   stacked vertically. The "classic" Oni behaviour.
- *
- * - LEFT_TO_RIGHT: one page per screen, HorizontalPager laid out so swiping
- *   leftward reveals the next page. Natural for western comics and for users
- *   who think "swipe forward = swipe left".
- *
- * - RIGHT_TO_LEFT: one page per screen, HorizontalPager laid out so swiping
- *   rightward reveals the next page. This is the manga-traditional direction
- *   and matches Mihon's default for Japanese-language manga.
- */
-enum class ReaderMode(val storageKey: String, val displayLabel: String) {
-    VERTICAL_SCROLL("vertical", "Vertical Scroll"),
-    LEFT_TO_RIGHT("ltr", "Left to Right"),
-    RIGHT_TO_LEFT("rtl", "Right to Left");
+enum class ReaderMode(
+    val storageKey: String,
+    val displayLabel: String,
+    val description: String,
+    val icon: ImageVector
+) {
+    VERTICAL_SCROLL("vertical", "Vertical Scroll", "Webtoon-style continuous scroll", Icons.Default.ViewAgenda),
+    LEFT_TO_RIGHT("ltr", "Left to Right", "One page per screen, swipe left", Icons.AutoMirrored.Filled.ArrowForward),
+    RIGHT_TO_LEFT("rtl", "Right to Left", "One page per screen, swipe right (manga)", Icons.AutoMirrored.Filled.ArrowBack);
 }

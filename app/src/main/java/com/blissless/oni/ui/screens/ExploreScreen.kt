@@ -112,7 +112,7 @@ fun ExploreScreen(
                 com.blissless.oni.data.ReadingStatus.DROPPED -> "DROPPED"
                 else -> ""
             },
-            currentChapterNumber = tracking?.currentChapterNumber ?: 0,
+            currentChapterNumber = tracking?.currentChapterNumber ?: 0.0,
             totalChapters = manga.chapters ?: 0,
             onDismiss = { showStatusDialog = false; selectedMangaForStatus = null },
             onRemove = {

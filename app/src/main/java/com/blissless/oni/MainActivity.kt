@@ -49,14 +49,12 @@ class MainActivity : ComponentActivity() {
         enableEdgeToEdge()
         handleAuthCallback(intent)
         setContent {
-            val useMaterial3Color by viewModel.useMaterial3Color.collectAsState()
+            val themeMode by viewModel.themeMode.collectAsState()
             val monochromeTheme by viewModel.monochromeTheme.collectAsState()
-            val oledTheme by viewModel.oledTheme.collectAsState()
 
             OniTheme(
-                useMaterial3Color = useMaterial3Color,
-                monochromeTheme = monochromeTheme,
-                oledTheme = oledTheme
+                themeMode = themeMode,
+                useMonochrome = monochromeTheme
             ) {
                 Surface(
                     modifier = Modifier.fillMaxSize(),
@@ -104,7 +102,13 @@ fun OniApp(viewModel: MainViewModel) {
     val lockRotation by viewModel.lockReaderRotation.collectAsState()
 
     var currentScreenType by rememberSaveable { mutableStateOf<String?>(null) }
+    val startupScreen by viewModel.startupScreen.collectAsState()
     var currentNavRoute by rememberSaveable { mutableStateOf("home") }
+    LaunchedEffect(startupScreen) {
+        if (currentScreenType == null) {
+            currentNavRoute = startupScreen
+        }
+    }
     var showSearch by rememberSaveable { mutableStateOf(false) }
     val currentScreen: Screen? = when (currentScreenType) {
         "detail" -> Screen.Detail

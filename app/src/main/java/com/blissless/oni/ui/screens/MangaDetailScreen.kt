@@ -79,7 +79,6 @@ import androidx.compose.runtime.Composable
 import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.collectAsState
 import androidx.compose.runtime.getValue
-import androidx.compose.runtime.mutableIntStateOf
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
 import androidx.compose.runtime.setValue
@@ -136,7 +135,7 @@ fun MangaDetailScreen(
     val detail = mangaDetail
 
     var currentStatus by remember(detail?.id) { mutableStateOf<ReadingStatus?>(null) }
-    var currentChapter by remember(detail?.id) { mutableIntStateOf(0) }
+    var currentChapter by remember(detail?.id) { mutableStateOf(0.0) }
     var showChapterSelect by remember(detail?.id) { mutableStateOf(false) }
     var fallbackCoverUrl by remember(detail?.id) {
         mutableStateOf(detail?.coverExtraLarge?.takeIf { it.isNotBlank() } ?: detail?.coverLarge?.takeIf { it.isNotBlank() } ?: viewModel.getCurrentMangaCoverUrl())
@@ -185,7 +184,24 @@ fun MangaDetailScreen(
             viewModel.refreshTrackingLists()
             val tracking = viewModel.resolveMangaTracking(mangaId)
             currentStatus = tracking?.status
-            currentChapter = tracking?.currentChapterNumber ?: 0
+            currentChapter = tracking?.currentChapterNumber ?: 0.0
+            // If we have a loaded chapter list, derive the correct chapter number
+            // from the list using the stored index. This is more reliable than
+            // currentChapterNumber which may be an AniList number (offset from
+            // the extension's numbering when partial chapters exist).
+            if (chapters.isNotEmpty() && tracking != null) {
+                val idx = tracking.currentChapterIndex.coerceIn(0, chapters.lastIndex)
+                val chapter = chapters[idx]
+                val parsed = chapter.title
+                    ?.removePrefix("Chapter ")
+                    ?.removePrefix("Ch. ")
+                    ?.substringBefore(":")
+                    ?.trim()
+                    ?.toDoubleOrNull()
+                if (parsed != null && parsed > 0) {
+                    currentChapter = parsed
+                }
+            }
             val trackingCover = tracking?.coverUrl ?: viewModel.getCurrentMangaCoverUrl()
             if (trackingCover != null) {
                 fallbackCoverUrl = trackingCover
@@ -298,7 +314,7 @@ fun MangaDetailScreen(
                                 showStatusDialog = false
                             },
                             onUpdate = { status, progress ->
-                                viewModel.updateTrackingStatus("anilist_${detail.id}", status)
+                                viewModel.updateTrackingStatus("anilist_${detail.id}", status, progress)
                                 currentStatus = status
                                 if (progress != null) {
                                     currentChapter = progress
@@ -724,7 +740,7 @@ private fun DividerDot() {
 private fun ActionButtonsCard(
     detail: AniListMangaDetail,
     currentStatus: ReadingStatus?,
-    currentChapter: Int,
+    currentChapter: Double,
     chapters: List<*>,
     viewModel: MainViewModel,
     showStatusMenu: Boolean,
@@ -748,7 +764,7 @@ private fun ActionButtonsCard(
     ) {
         Column(modifier = Modifier.padding(16.dp)) {
             val totalAvailable = chapters.size.coerceAtLeast(detail.chapters ?: 0)
-            val hasNextChapter = totalAvailable == 0 || currentChapter + 1 <= totalAvailable
+            val hasNextChapter = totalAvailable == 0 || currentChapter.toInt() + 1 <= totalAvailable
             if (hasNextChapter) {
                 Button(
                     onClick = onStartReading,
@@ -760,7 +776,7 @@ private fun ActionButtonsCard(
                     Icon(Icons.Default.PlayArrow, contentDescription = null, modifier = Modifier.size(20.dp))
                     Spacer(Modifier.width(8.dp))
                     Text(
-                        text = if (currentStatus == ReadingStatus.READING) "Ch. ${currentChapter + 1}" else "Start Reading",
+                        text = if (currentStatus == ReadingStatus.READING) "Read Now" else "Start Reading",
                         fontWeight = FontWeight.Bold,
                         fontSize = 14.sp,
                         letterSpacing = 0.3.sp
@@ -1336,12 +1352,12 @@ private fun SectionTitle(text: String) {
 
 @Composable
 fun ChapterProgressDialog(
-    currentChapter: Int,
+    currentChapter: Double,
     totalChapters: Int,
-    onSet: (Int) -> Unit,
+    onSet: (Double) -> Unit,
     onDismiss: () -> Unit
 ) {
-    var input by remember { mutableStateOf(currentChapter.toString()) }
+    var input by remember { mutableStateOf(if (currentChapter % 1.0 == 0.0) currentChapter.toInt().toString() else currentChapter.toString()) }
 
     AlertDialog(
         onDismissRequest = onDismiss,
@@ -1360,7 +1376,7 @@ fun ChapterProgressDialog(
                 Spacer(Modifier.height(12.dp))
                 OutlinedTextField(
                     value = input,
-                    onValueChange = { input = it.filter { c -> c.isDigit() } },
+                    onValueChange = { input = it.filter { c -> c.isDigit() || c == '.' } },
                     keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Number),
                     singleLine = true,
                     colors = OutlinedTextFieldDefaults.colors(
@@ -1378,8 +1394,8 @@ fun ChapterProgressDialog(
         confirmButton = {
             Button(
                 onClick = {
-                    val chapter = input.toIntOrNull()
-                    if (chapter != null && chapter >= 1) {
+                    val chapter = input.toDoubleOrNull()
+                    if (chapter != null && chapter >= 1.0) {
                         onSet(chapter)
                     }
                 },

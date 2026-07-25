@@ -54,14 +54,14 @@ fun MangaStatusDialog(
     title: String,
     coverUrl: String?,
     currentStatus: String,
-    currentChapterNumber: Int,
+    currentChapterNumber: Double,
     totalChapters: Int,
     onDismiss: () -> Unit,
     onRemove: () -> Unit,
-    onUpdate: (ReadingStatus, Int?) -> Unit
+    onUpdate: (ReadingStatus, Double?) -> Unit
 ) {
     var selectedStatus by remember { mutableStateOf(currentStatus) }
-    var selectedProgress by remember { mutableStateOf(if (currentChapterNumber > 0) currentChapterNumber.toString() else "") }
+    var selectedProgress by remember { mutableStateOf(if (currentChapterNumber > 0) { if (currentChapterNumber % 1.0 == 0.0) currentChapterNumber.toInt().toString() else currentChapterNumber.toString() } else "") }
     var markedForRemoval by remember { mutableStateOf(false) }
     var showAnimation by remember { mutableStateOf(false) }
 
@@ -109,10 +109,11 @@ fun MangaStatusDialog(
                             overflow = TextOverflow.Ellipsis
                         )
                         Spacer(modifier = Modifier.height(4.dp))
+                        val displayChapter = if (currentChapterNumber % 1.0 == 0.0) currentChapterNumber.toInt().toString() else currentChapterNumber.toString()
                         val progressText = if (totalChapters > 0) {
-                            "$currentChapterNumber / $totalChapters"
+                            "$displayChapter / $totalChapters"
                         } else {
-                            "$currentChapterNumber"
+                            "$displayChapter"
                         }
                         Text(
                             "Chapter: $progressText",
@@ -163,9 +164,9 @@ fun MangaStatusDialog(
                 OutlinedTextField(
                     value = selectedProgress,
                     onValueChange = { newValue ->
-                        val filtered = newValue.filter { c -> c.isDigit() }
+                        val filtered = newValue.filter { c -> c.isDigit() || c == '.' }
                         val clamped = if (totalChapters > 0) {
-                            filtered.toIntOrNull()?.coerceIn(0, totalChapters)?.toString() ?: filtered
+                            filtered.toDoubleOrNull()?.coerceIn(0.0, totalChapters.toDouble())?.toString() ?: filtered
                         } else {
                             filtered
                         }
@@ -198,7 +199,7 @@ fun MangaStatusDialog(
                                 "DROPPED" -> ReadingStatus.DROPPED
                                 else -> ReadingStatus.READING
                             }
-                            val progress = selectedProgress.toIntOrNull()
+                            val progress = selectedProgress.toDoubleOrNull()
                             onUpdate(status, progress)
                         }
                     },
