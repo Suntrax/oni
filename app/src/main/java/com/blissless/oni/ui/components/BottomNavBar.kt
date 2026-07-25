@@ -99,13 +99,13 @@ fun BottomNavBar(
                                 Icon(
                                     icons[index],
                                     contentDescription = item,
-                                    tint = Color.White,
+                                    tint = MaterialTheme.colorScheme.onPrimary,
                                     modifier = Modifier.size(18.dp)
                                 )
                                 Spacer(modifier = Modifier.width(4.dp))
                                 Text(
                                     text = item,
-                                    color = Color.White,
+                                    color = MaterialTheme.colorScheme.onPrimary,
                                     style = MaterialTheme.typography.labelMedium
                                 )
                             }

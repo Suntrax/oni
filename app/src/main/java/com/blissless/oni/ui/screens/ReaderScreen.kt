@@ -341,8 +341,7 @@ fun ReaderScreen(
                                         .fillMaxWidth()
                                         .aspectRatio(7f / 10f),
                                     fillWidth = true,
-                                    onSingleTap = { showControls = !showControls },
-                                    gesturesEnabled = false
+                                    onSingleTap = { showControls = !showControls }
                                 )
                             }
                         }
@@ -1278,7 +1277,7 @@ private fun SegmentedToggleItem(
         Icon(
             icon,
             contentDescription = contentDescription,
-            tint = if (selected) Color.White else Color.White.copy(alpha = 0.5f),
+            tint = if (selected) MaterialTheme.colorScheme.onPrimary else MaterialTheme.colorScheme.onSurface.copy(alpha = 0.6f),
             modifier = Modifier.size(18.dp)
         )
     }
