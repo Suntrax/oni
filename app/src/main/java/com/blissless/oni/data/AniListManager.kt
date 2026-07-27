@@ -96,6 +96,40 @@ data class AniListRankingEntry(val rank: Int, val type: String, val context: Str
 data class AniListCharacterEntry(val name: String, val image: String?, val role: String)
 data class AniListExternalLink(val url: String, val site: String)
 
+data class AniListUserProfile(
+    val name: String,
+    val avatarUrl: String?,
+    val bannerUrl: String?,
+    val about: String?,
+    val createdAt: Long?,
+    val chaptersRead: Int,
+    val mangaRead: Int,
+    val meanScore: Float,
+    val minutesWatched: Int
+)
+
+data class AniListFavorite(
+    val id: Int,
+    val title: String,
+    val coverUrl: String?,
+    val format: String? = null,
+    val status: String? = null,
+    val year: Int? = null,
+    val totalChapters: Int? = null,
+    val score: Int? = null
+)
+
+data class AniListUserActivity(
+    val mangaTitle: String,
+    val coverUrl: String?,
+    val progress: Int,
+    val totalChapters: Int?,
+    val status: String,
+    val score: Int?,
+    val updatedAt: Long,
+    val mediaId: Int = 0
+)
+
 data class ExploreSection(
     val key: String,
     val title: String,
@@ -419,13 +453,23 @@ class AniListManager(private val context: Context) {
                 val responseBody = response.body?.string()
                 if (response.isSuccessful && responseBody != null) {
                     val root = JSONObject(responseBody)
+                    if (root.has("errors")) {
+                        Log.w("AniList", "GraphQL errors: ${root.optJSONArray("errors")}")
+                    }
                     val data = root.optJSONObject("data")
-                    if (data != null) Result.success(data)
-                    else Result.failure(Exception("No data in response"))
+                    if (data != null) {
+                        Log.d("AniList", "GraphQL response data: $data")
+                        Result.success(data)
+                    } else {
+                        Log.e("AniList", "No data in response: $responseBody")
+                        Result.failure(Exception("No data in response"))
+                    }
                 } else {
+                    Log.e("AniList", "GraphQL error ${response.code}: $responseBody")
                     Result.failure(Exception("GraphQL error: ${response.code} $responseBody"))
                 }
             } catch (e: Exception) {
+                Log.e("AniList", "GraphQL exception: ${e.message}", e)
                 Result.failure(e)
             }
         }
@@ -636,6 +680,236 @@ class AniListManager(private val context: Context) {
             characters = charactersList,
             externalLinks = linksList
         )
+    }
+
+    // =============== Profile methods ===============
+
+    fun getAvatarUrl(): String? {
+        val json = prefs.getString(KEY_USER_DATA, null) ?: return null
+        return try {
+            JSONObject(json).optJSONObject("avatar")?.optString("large")
+        } catch (e: Exception) { null }
+    }
+
+    suspend fun getUserProfile(): Result<AniListUserProfile> {
+        val token = getAccessToken() ?: return Result.failure(Exception("Not logged in"))
+        val query = """
+            query {
+              Viewer {
+                id
+                name
+                about
+                avatar { large }
+                bannerImage
+                createdAt
+                statistics {
+                  manga {
+                    chaptersRead
+                    meanScore
+                    minutesWatched
+                  }
+                }
+              }
+            }
+        """.trimIndent()
+        return withContext(Dispatchers.IO) {
+            try {
+                val result = executeGraphQLRaw(query, null)
+                result.fold(
+                    onSuccess = { data ->
+                        val viewer = data.optJSONObject("Viewer")
+                            ?: return@fold Result.failure(Exception("No Viewer data"))
+                        val stats = viewer.optJSONObject("statistics")?.optJSONObject("manga")
+                        Log.d("AniList", "Viewer name=${viewer.optString("name")}, bannerImage=${viewer.opt("bannerImage")}, about=${viewer.opt("about")}, createdAt=${viewer.opt("createdAt")}, stats=$stats")
+                        Result.success(AniListUserProfile(
+                            name = viewer.optString("name", ""),
+                            avatarUrl = viewer.optJSONObject("avatar")?.optString("large"),
+                            bannerUrl = viewer.optString("bannerImage").takeIf { it.isNotBlank() && it != "null" },
+                            about = viewer.optString("about").takeIf { it.isNotBlank() && it != "null" },
+                            createdAt = viewer.optLong("createdAt").takeIf { it > 0 },
+                            chaptersRead = stats?.optInt("chaptersRead", 0) ?: 0,
+                            mangaRead = 0,
+                            meanScore = stats?.optDouble("meanScore", 0.0)?.toFloat() ?: 0f,
+                            minutesWatched = stats?.optInt("minutesWatched", 0) ?: 0
+                        ))
+                    },
+                    onFailure = { Result.failure(it) }
+                )
+            } catch (e: Exception) {
+                Result.failure(e)
+            }
+        }
+    }
+
+    suspend fun getUserFavorites(): Result<List<AniListFavorite>> {
+        val token = getAccessToken() ?: return Result.failure(Exception("Not logged in"))
+        val query = """
+            query {
+              Viewer {
+                favourites {
+                  manga {
+                    nodes {
+                      id
+                      title { romaji english }
+                      coverImage { large }
+                      format
+                      status
+                      startDate { year }
+                      chapters
+                      averageScore
+                    }
+                  }
+                }
+              }
+            }
+        """.trimIndent()
+        return withContext(Dispatchers.IO) {
+            try {
+                val result = executeGraphQLRaw(query, null)
+                result.fold(
+                    onSuccess = { data ->
+                        val viewer = data.optJSONObject("Viewer")
+                            ?: return@fold Result.failure(Exception("No Viewer data"))
+                        val favManga = viewer.optJSONObject("favourites")?.optJSONObject("manga")?.optJSONArray("nodes")
+                        val favorites = mutableListOf<AniListFavorite>()
+                        if (favManga != null) {
+                            for (i in 0 until favManga.length()) {
+                                val node = favManga.getJSONObject(i)
+                                val title = node.optJSONObject("title")
+                                val startDate = node.optJSONObject("startDate")
+                                favorites.add(AniListFavorite(
+                                    id = node.optInt("id"),
+                                    title = title?.optString("english")?.takeIf { it.isNotBlank() && it != "null" }
+                                        ?: title?.optString("romaji") ?: "",
+                                    coverUrl = node.optJSONObject("coverImage")?.optString("large"),
+                                    format = node.optString("format").takeIf { it.isNotBlank() && it != "null" },
+                                    status = node.optString("status").takeIf { it.isNotBlank() && it != "null" },
+                                    year = startDate?.optInt("year")?.takeIf { it > 0 },
+                                    totalChapters = node.optInt("chapters").takeIf { it > 0 },
+                                    score = node.optInt("averageScore").takeIf { it > 0 }
+                                ))
+                            }
+                        }
+                        Result.success(favorites)
+                    },
+                    onFailure = { Result.failure(it) }
+                )
+            } catch (e: Exception) {
+                Result.failure(e)
+            }
+        }
+    }
+
+    suspend fun toggleFavorite(mediaId: Int): Result<Boolean> {
+        val token = getAccessToken() ?: return Result.failure(Exception("Not logged in"))
+        val dollar = "${'$'}"
+        val mutation = """
+            mutation(${dollar}id: Int!) {
+                ToggleFavourite(mangaId: ${dollar}id) {
+                    manga {
+                        edges {
+                            node {
+                                id
+                            }
+                        }
+                    }
+                }
+            }
+        """.trimIndent()
+        val variables = JSONObject().apply {
+            put("id", mediaId)
+        }
+        return withContext(Dispatchers.IO) {
+            try {
+                val result = executeGraphQLWithVariables(mutation, variables, token)
+                result.fold(
+                    onSuccess = {
+                        // After toggling, check current state by re-fetching favorites
+                        val favResult = getUserFavorites()
+                        favResult.fold(
+                            onSuccess = { favorites ->
+                                val isFav = favorites.any { it.id == mediaId }
+                                Result.success(isFav)
+                            },
+                            onFailure = { Result.failure(it) }
+                        )
+                    },
+                    onFailure = { Result.failure(it) }
+                )
+            } catch (e: Exception) {
+                Result.failure(e)
+            }
+        }
+    }
+
+    suspend fun getUserActivity(): Result<List<AniListUserActivity>> {
+        val userResult = getUserInfo()
+        val data = userResult.getOrNull() ?: return Result.failure(Exception("Failed to get user info"))
+        val viewer = data.optJSONObject("Viewer") ?: return Result.failure(Exception("No Viewer data"))
+        val userId = viewer.optInt("id", -1)
+        if (userId < 0) return Result.failure(Exception("Invalid user ID"))
+
+        val query = """
+            query (${'$'}userId: Int) {
+              MediaListCollection(userId: ${'$'}userId, type: MANGA) {
+                lists {
+                  name
+                  entries {
+                    media {
+                      id
+                      title { romaji english }
+                      coverImage { large }
+                      chapters
+                    }
+                    progress
+                    status
+                    score
+                    updatedAt
+                  }
+                }
+              }
+            }
+        """.trimIndent()
+        return withContext(Dispatchers.IO) {
+            try {
+                val variables = JSONObject().apply { put("userId", userId) }
+                val result = executeGraphQLRaw(query, variables)
+                result.fold(
+                    onSuccess = { respData ->
+                        val collection = respData.optJSONObject("MediaListCollection")
+                        val lists = collection?.optJSONArray("lists")
+                        val activities = mutableListOf<AniListUserActivity>()
+                        if (lists != null) {
+                            for (i in 0 until lists.length()) {
+                                val entries = lists.getJSONObject(i).optJSONArray("entries")
+                                if (entries != null) {
+                                    for (j in 0 until entries.length()) {
+                                        val entry = entries.getJSONObject(j)
+                                        val media = entry.optJSONObject("media")
+                                        val title = media?.optJSONObject("title")
+                                        activities.add(AniListUserActivity(
+                                            mangaTitle = title?.optString("english")?.takeIf { it.isNotBlank() && it != "null" }
+                                                ?: title?.optString("romaji") ?: "",
+                                            coverUrl = media?.optJSONObject("coverImage")?.optString("large"),
+                                            progress = entry.optInt("progress", 0),
+                                            totalChapters = media?.optInt("chapters", 0)?.takeIf { it > 0 },
+                                            status = entry.optString("status", ""),
+                                            score = entry.optInt("score", 0).takeIf { it > 0 },
+                                            updatedAt = entry.optLong("updatedAt", 0),
+                                            mediaId = media?.optInt("id", 0) ?: 0
+                                        ))
+                                    }
+                                }
+                            }
+                        }
+                        Result.success(activities.sortedByDescending { it.updatedAt })
+                    },
+                    onFailure = { Result.failure(it) }
+                )
+            } catch (e: Exception) {
+                Result.failure(e)
+            }
+        }
     }
 
     // =============== Existing methods (auth, user lists, sync) ===============

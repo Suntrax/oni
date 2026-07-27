@@ -32,6 +32,7 @@ import com.blissless.oni.ui.screens.HomeScreen
 import com.blissless.oni.ui.screens.MangaDetailScreen
 import com.blissless.oni.ui.screens.ReaderScreen
 import com.blissless.oni.ui.screens.DownloadsScreen
+import com.blissless.oni.ui.screens.ProfileScreen
 import com.blissless.oni.ui.screens.SearchScreen
 import com.blissless.oni.ui.screens.SettingsScreen
 import com.blissless.oni.ui.theme.OniTheme
@@ -109,7 +110,11 @@ fun OniApp(viewModel: MainViewModel) {
             currentNavRoute = startupScreen
         }
     }
+    val isOfflineMode by viewModel.isOfflineMode.collectAsState()
+
     var showSearch by rememberSaveable { mutableStateOf(false) }
+    var showProfile by rememberSaveable { mutableStateOf(false) }
+    var downloadsFullscreen by rememberSaveable { mutableStateOf(false) }
     val currentScreen: Screen? = when (currentScreenType) {
         "detail" -> Screen.Detail
         "reader" -> Screen.Reader
@@ -119,9 +124,13 @@ fun OniApp(viewModel: MainViewModel) {
 
     LaunchedEffect(currentNavRoute) {
         showSearch = false
+        showProfile = false
     }
     LaunchedEffect(currentScreenType) {
-        if (currentScreenType != null) showSearch = false
+        if (currentScreenType != null) {
+            showSearch = false
+            showProfile = false
+        }
     }
 
     LaunchedEffect(lockRotation) {
@@ -175,6 +184,7 @@ fun OniApp(viewModel: MainViewModel) {
                         viewModel.clearResumeProgress(track.mangaId)
                     },
                     onSearchClick = { showSearch = true },
+                    onProfileClick = { showProfile = true },
                     onLoginClick = {
                         val intent = android.content.Intent(
                             android.content.Intent.ACTION_VIEW,
@@ -183,7 +193,17 @@ fun OniApp(viewModel: MainViewModel) {
                         context.startActivity(intent)
                     }
                 )
-                "downloads" -> DownloadsScreen()
+                "downloads" -> DownloadsScreen(
+                    viewModel = viewModel,
+                    onReadOffline = { mangaTitle, chapterNumber ->
+                        viewModel.loadOfflineChapterImages(mangaTitle, chapterNumber)
+                        currentScreenType = "reader"
+                    },
+                    onDiscardProgress = { mangaSlug ->
+                        viewModel.discardOfflineProgress(mangaSlug)
+                    },
+                    onFullscreenChanged = { downloadsFullscreen = it }
+                )
                 "settings" -> SettingsScreen(viewModel = viewModel)
             }
         }
@@ -198,6 +218,23 @@ fun OniApp(viewModel: MainViewModel) {
                 },
                 onDismiss = { showSearch = false },
                 isActive = showSearch
+            )
+        }
+
+        if (showProfile && currentScreen == null) {
+            ProfileScreen(
+                viewModel = viewModel,
+                onBack = { showProfile = false },
+                onSettingsClick = {
+                    showProfile = false
+                    currentNavRoute = "settings"
+                },
+                onLogoutClick = { showProfile = false },
+                onMangaClick = { mediaId ->
+                    showProfile = false
+                    viewModel.selectMangaById(mediaId)
+                    currentScreenType = "detail"
+                }
             )
         }
 
@@ -229,8 +266,15 @@ fun OniApp(viewModel: MainViewModel) {
                             ReaderScreen(
                                 viewModel = viewModel,
                                 onBack = {
-                                    currentScreenType = "detail"
+                                    val wasOffline = isOfflineMode
                                     viewModel.clearSelection()
+                                    if (wasOffline) {
+                                        currentScreenType = null
+                                        currentNavRoute = "downloads"
+                                        viewModel.scanDownloadedManga()
+                                    } else {
+                                        currentScreenType = "detail"
+                                    }
                                 }
                             )
                         }
@@ -241,7 +285,7 @@ fun OniApp(viewModel: MainViewModel) {
             }
         }
 
-        if (currentScreen == null) {
+        if (currentScreen == null && !showProfile && !downloadsFullscreen) {
             BottomNavBar(
                 currentRoute = currentNavRoute,
                 onNavigate = { route -> currentNavRoute = route },

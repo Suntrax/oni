@@ -24,6 +24,7 @@ class SettingsManager(context: Context) {
         private const val KEY_THEME_MODE = "theme_mode"
         private const val KEY_SHOW_PAGE_INDICATOR = "show_page_indicator"
         private const val KEY_STARTUP_SCREEN = "startup_screen"
+        private const val KEY_DOWNLOAD_DIR = "download_directory"
         private const val DEFAULT_SYNC_THRESHOLD = 90
     }
 
@@ -109,6 +110,29 @@ class SettingsManager(context: Context) {
 
     fun setStartupScreen(screen: String) {
         prefs.edit().putString(KEY_STARTUP_SCREEN, screen).apply()
+    }
+
+    fun getDownloadDirectory(context: Context): String {
+        val stored = prefs.getString(KEY_DOWNLOAD_DIR, null)
+        val default = context.getExternalFilesDir(null)?.absolutePath + "/oni"
+        if (stored == null) return default
+
+        // Fix any stored SAF tree/document URI paths to real filesystem paths
+        val fixed = when {
+            stored.startsWith("/tree/primary:") ->
+                "/storage/emulated/0/" + stored.removePrefix("/tree/primary:")
+            stored.startsWith("/document/primary:") ->
+                "/storage/emulated/0/" + stored.removePrefix("/document/primary:")
+            else -> stored
+        }
+        if (fixed != stored) {
+            prefs.edit().putString(KEY_DOWNLOAD_DIR, fixed).apply()
+        }
+        return fixed
+    }
+
+    fun setDownloadDirectory(path: String) {
+        prefs.edit().putString(KEY_DOWNLOAD_DIR, path).apply()
     }
 }
 

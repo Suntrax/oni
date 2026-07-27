@@ -25,10 +25,14 @@ import androidx.compose.foundation.layout.aspectRatio
 import androidx.compose.foundation.layout.fillMaxHeight
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
+import androidx.compose.foundation.layout.WindowInsets
+import androidx.compose.foundation.layout.asPaddingValues
 import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.heightIn
+import androidx.compose.foundation.layout.navigationBars
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
+import androidx.compose.foundation.layout.statusBars
 import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.itemsIndexed
@@ -40,6 +44,8 @@ import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.automirrored.filled.ArrowBack
 import androidx.compose.material.icons.automirrored.filled.ArrowForward
 import androidx.compose.material.icons.filled.Close
+import androidx.compose.material.icons.filled.Delete
+import androidx.compose.material.icons.filled.Download
 import androidx.compose.material.icons.filled.KeyboardArrowDown
 import androidx.compose.material.icons.filled.PlayArrow
 import androidx.compose.material.icons.filled.Search
@@ -108,11 +114,17 @@ fun ReaderScreen(
     val readChapterIndices by viewModel.readChapterIndices.collectAsState()
     val nextChapterToRead by viewModel.nextChapterToRead.collectAsState()
     val syncThreshold by viewModel.anilistSyncThreshold.collectAsState()
+    val isOfflineMode by viewModel.isOfflineMode.collectAsState()
     val resumeScrollProgress by viewModel.resumeScrollProgress.collectAsState()
     val readerMode by viewModel.readerMode.collectAsState()
     val selectedExtensionAuthority by viewModel.selectedExtensionAuthority.collectAsState()
     val mangaTitle by viewModel.mangaTitle.collectAsState()
     val showPageIndicator by viewModel.showPageIndicator.collectAsState()
+    val downloadedChapterNumbers by viewModel.downloadedChapterNumbers.collectAsState()
+
+    LaunchedEffect(mangaTitle) {
+        if (mangaTitle.isNotBlank()) viewModel.loadDownloadedChapterNumbers(mangaTitle)
+    }
 
     val context = LocalContext.current
 
@@ -211,6 +223,9 @@ fun ReaderScreen(
                 }
                 if (best != null) {
                     currentPageIndex = best.index
+                    if (isOfflineMode && resumeScrollProgress < 0f) {
+                        viewModel.updateOfflinePageIndex(best.index)
+                    }
                 }
             }
     }
@@ -306,7 +321,9 @@ fun ReaderScreen(
                                 isShowingChapterList = false
                             }
                         }
-                    }
+                    },
+                    downloadedNumbers = downloadedChapterNumbers,
+                    onBack = { onBack() }
                 )
             }
 
@@ -413,7 +430,8 @@ fun ReaderScreen(
                                 isShowingChapterList = false
                             }
                         }
-                    }
+                    },
+                    downloadedNumbers = downloadedChapterNumbers
                 )
             }
         }
@@ -507,19 +525,21 @@ fun ReaderScreen(
                                 .height(3.dp)
                                 .background(MaterialTheme.colorScheme.primary)
                         )
-                        Box(
-                            modifier = Modifier
-                                .fillMaxWidth(syncThreshold / 100f)
-                                .fillMaxHeight()
-                                .background(Color.Transparent)
-                        ) {
+                        if (!isOfflineMode) {
                             Box(
                                 modifier = Modifier
-                                    .align(Alignment.CenterEnd)
-                                    .width(2.dp)
+                                    .fillMaxWidth(syncThreshold / 100f)
                                     .fillMaxHeight()
-                                    .background(Color.White.copy(alpha = 0.8f))
-                            )
+                                    .background(Color.Transparent)
+                            ) {
+                                Box(
+                                    modifier = Modifier
+                                        .align(Alignment.CenterEnd)
+                                        .width(2.dp)
+                                        .fillMaxHeight()
+                                        .background(Color.White.copy(alpha = 0.8f))
+                                )
+                            }
                         }
                     }
                 }
@@ -591,7 +611,11 @@ fun ChapterListWithGroups(
     nextChapterToRead: Int?,
     onChapterClick: (Int) -> Unit,
     modifier: Modifier = Modifier,
-    onContinueReading: (() -> Unit)? = null
+    onContinueReading: (() -> Unit)? = null,
+    downloadedNumbers: Set<Double> = emptySet(),
+    onDeleteChapter: ((Double) -> Unit)? = null,
+    overrideContentPadding: PaddingValues? = null,
+    onBack: (() -> Unit)? = null
 ) {
     if (chapters.isEmpty()) {
         Box(
@@ -637,6 +661,7 @@ fun ChapterListWithGroups(
         val readCount = readChapterIndices.size
         val totalCount = integerChapterCount.coerceAtLeast(chapters.size)
         val progress = if (totalCount > 0) readCount.toFloat() / totalCount else 0f
+        val statusBarPadding = WindowInsets.statusBars.asPaddingValues()
 
         LaunchedEffect(chapters, chapterToExpand) {
             if (chapterToExpand != null && chapterToExpand >= 0) {
@@ -653,7 +678,11 @@ fun ChapterListWithGroups(
         LazyColumn(
             state = listState,
             modifier = modifier.fillMaxSize().background(MaterialTheme.colorScheme.background),
-            contentPadding = PaddingValues(horizontal = 16.dp, vertical = 12.dp),
+            contentPadding = overrideContentPadding ?: PaddingValues(
+                start = 16.dp, end = 16.dp,
+                top = statusBarPadding.calculateTopPadding() + 12.dp,
+                bottom = statusBarPadding.calculateBottomPadding() + 12.dp
+            ),
             verticalArrangement = Arrangement.spacedBy(10.dp)
         ) {
             item(key = "header") {
@@ -664,7 +693,8 @@ fun ChapterListWithGroups(
                     nextChapterToRead = nextChapterToRead,
                     onContinueReading = onContinueReading ?: {
                         if (nextChapterToRead != null) onChapterClick(nextChapterToRead!!)
-                    }
+                    },
+                    onBack = onBack
                 )
             }
 
@@ -701,7 +731,9 @@ fun ChapterListWithGroups(
                             readChapterIndices = readChapterIndices,
                             nextChapterToRead = nextChapterToRead,
                             initiallyExpanded = containsTarget,
-                            onChapterClick = onChapterClick
+                            onChapterClick = onChapterClick,
+                            downloadedNumbers = downloadedNumbers,
+                            onDeleteChapter = onDeleteChapter
                         )
                     }
                 }
@@ -798,7 +830,8 @@ private fun ChapterListHeader(
     totalCount: Int,
     progress: Float,
     nextChapterToRead: Int?,
-    onContinueReading: () -> Unit
+    onContinueReading: () -> Unit,
+    onBack: (() -> Unit)? = null
 ) {
     Column {
         Row(
@@ -806,20 +839,31 @@ private fun ChapterListHeader(
             horizontalArrangement = Arrangement.SpaceBetween,
             verticalAlignment = Alignment.CenterVertically
         ) {
-            Column {
-                Text(
-                    text = "Chapters",
-                    style = MaterialTheme.typography.titleLarge,
-                    color = Color.White,
-                    fontWeight = FontWeight.Bold,
-                    letterSpacing = 0.5.sp
-                )
-                Text(
-                    text = "$readCount of $totalCount read",
-                    style = MaterialTheme.typography.bodySmall,
-                    color = MaterialTheme.colorScheme.onSurfaceVariant,
-                    letterSpacing = 0.2.sp
-                )
+            Row(verticalAlignment = Alignment.CenterVertically) {
+                if (onBack != null) {
+                    IconButton(onClick = onBack) {
+                        Icon(
+                            Icons.AutoMirrored.Filled.ArrowBack,
+                            contentDescription = "Back",
+                            tint = Color.White
+                        )
+                    }
+                }
+                Column {
+                    Text(
+                        text = "Chapters",
+                        style = MaterialTheme.typography.titleLarge,
+                        color = Color.White,
+                        fontWeight = FontWeight.Bold,
+                        letterSpacing = 0.5.sp
+                    )
+                    Text(
+                        text = "$readCount of $totalCount read",
+                        style = MaterialTheme.typography.bodySmall,
+                        color = MaterialTheme.colorScheme.onSurfaceVariant,
+                        letterSpacing = 0.2.sp
+                    )
+                }
             }
 
             if (progress > 0f) {
@@ -966,7 +1010,9 @@ fun ChapterGroup(
     readChapterIndices: Set<Int>,
     nextChapterToRead: Int?,
     initiallyExpanded: Boolean = false,
-    onChapterClick: (Int) -> Unit
+    onChapterClick: (Int) -> Unit,
+    downloadedNumbers: Set<Double> = emptySet(),
+    onDeleteChapter: ((Double) -> Unit)? = null
 ) {
     var expanded by remember { mutableStateOf(initiallyExpanded) }
     LaunchedEffect(initiallyExpanded) {
@@ -1069,12 +1115,16 @@ fun ChapterGroup(
             ) {
                 Column(modifier = Modifier.padding(vertical = 4.dp)) {
                     groupChapters.forEach { (absoluteIndex, chapter) ->
+                        val chNumStr = extractChapterNum(chapter.title ?: "")
+                        val chNum = chNumStr.toDoubleOrNull() ?: 0.0
                         ChapterRow(
                             chapter = chapter,
                             isSelected = absoluteIndex == selectedIndex,
                             isRead = absoluteIndex in readChapterIndices,
                             isNextToRead = absoluteIndex == nextChapterToRead,
-                            onClick = { onChapterClick(absoluteIndex) }
+                            isDownloaded = chNum in downloadedNumbers,
+                            onClick = { onChapterClick(absoluteIndex) },
+                            onDelete = onDeleteChapter?.let { { it(chNum) } }
                         )
                     }
                 }
@@ -1089,7 +1139,9 @@ fun ChapterRow(
     isSelected: Boolean,
     isRead: Boolean,
     isNextToRead: Boolean,
-    onClick: () -> Unit
+    isDownloaded: Boolean = false,
+    onClick: () -> Unit,
+    onDelete: (() -> Unit)? = null
 ) {
     val showAsNext = isNextToRead && !isRead
     // Chapters that neither MangaDex nor the extension can provide are rendered
@@ -1166,7 +1218,19 @@ fun ChapterRow(
 
             Spacer(modifier = Modifier.width(8.dp))
 
-            when {
+            if (onDelete != null) {
+                Icon(
+                    Icons.Default.Delete, contentDescription = "Delete chapter",
+                    tint = MaterialTheme.colorScheme.error.copy(alpha = 0.7f),
+                    modifier = Modifier
+                        .size(18.dp)
+                        .clickable(
+                            interactionSource = remember { MutableInteractionSource() },
+                            indication = null,
+                            onClick = onDelete
+                        )
+                )
+            } else when {
                 isSelected && !showAsNext -> {
                     Box(
                         modifier = Modifier
@@ -1186,6 +1250,13 @@ fun ChapterRow(
                         modifier = Modifier
                             .size(8.dp)
                             .background(ReadGreen.copy(alpha = 0.5f), CircleShape)
+                    )
+                }
+                isDownloaded -> {
+                    Icon(
+                        Icons.Default.Download, contentDescription = "Downloaded",
+                        tint = MaterialTheme.colorScheme.onSurfaceVariant.copy(alpha = 0.6f),
+                        modifier = Modifier.size(12.dp)
                     )
                 }
             }

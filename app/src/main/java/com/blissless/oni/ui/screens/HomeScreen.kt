@@ -396,6 +396,7 @@ fun HomeScreen(
     onResumeReading: (MangaTrack) -> Unit = onContinueReading,
     onRemoveResumeTracking: (MangaTrack) -> Unit = {},
     onSearchClick: () -> Unit = {},
+    onProfileClick: () -> Unit = {},
     onLoginClick: () -> Unit = {},
     onMangaStatusChange: (MangaTrack, ReadingStatus, Double?) -> Unit = { _, _, _ -> }
 ) {
@@ -430,13 +431,14 @@ fun HomeScreen(
             verticalAlignment = Alignment.CenterVertically
         ) {
             if (isLoggedIn) {
+                val avatarUrl by viewModel.userProfile.collectAsState()
                 Surface(
                     modifier = Modifier.weight(1f),
                     shape = RoundedCornerShape(18.dp),
                     color = MaterialTheme.colorScheme.surface,
                     tonalElevation = 2.dp,
                     shadowElevation = 1.dp,
-                    onClick = onSearchClick
+                    onClick = onProfileClick
                 ) {
                     Row(
                         modifier = Modifier.padding(start = 6.dp, end = 16.dp, top = 6.dp, bottom = 6.dp),
@@ -446,12 +448,22 @@ fun HomeScreen(
                             modifier = Modifier.size(44.dp).clip(CircleShape).background(MaterialTheme.colorScheme.surfaceVariant),
                             contentAlignment = Alignment.Center
                         ) {
-                            Icon(
-                                Icons.Default.Bookmark,
-                                contentDescription = null,
-                                tint = MaterialTheme.colorScheme.primary,
-                                modifier = Modifier.size(24.dp)
-                            )
+                            val avatar = avatarUrl?.avatarUrl ?: viewModel.getAvatarUrl()
+                            if (avatar != null) {
+                                AsyncImage(
+                                    model = avatar,
+                                    contentDescription = "Profile",
+                                    modifier = Modifier.size(44.dp).clip(CircleShape),
+                                    contentScale = ContentScale.Crop
+                                )
+                            } else {
+                                Icon(
+                                    Icons.Default.Bookmark,
+                                    contentDescription = null,
+                                    tint = MaterialTheme.colorScheme.primary,
+                                    modifier = Modifier.size(24.dp)
+                                )
+                            }
                         }
                         Spacer(modifier = Modifier.width(12.dp))
                         Column {

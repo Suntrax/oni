@@ -14,6 +14,7 @@ import com.blissless.oni.data.AniListMangaDetail
 import com.blissless.oni.data.AniListSearchResult
 import com.blissless.oni.data.ChapterInfo
 import com.blissless.oni.data.ChapterImages
+import com.blissless.oni.data.DownloadManager
 import com.blissless.oni.data.ExploreSection
 import com.blissless.oni.data.MangaDexAggregate
 import com.blissless.oni.data.MangaDexManager
@@ -68,12 +69,23 @@ data class ExtensionChapter(
     val pageCount: Int
 )
 
+data class DownloadedResumeEntry(
+    val title: String,
+    val slug: String,
+    val coverPath: String?,
+    val currentChapter: Double,
+    val totalChapters: Int,
+    val mangaId: String?,
+    val scrollProgress: Float = 0f
+)
+
 class MainViewModel(private val context: Context) : ViewModel() {
 
     private val trackingManager = TrackingManager(context)
     private val anilistManager = AniListManager(context)
     private val settingsManager = SettingsManager(context)
     private val mangaDexManager = MangaDexManager()
+    val downloadManager = DownloadManager(context, settingsManager)
 
     private val _searchQuery = MutableStateFlow("")
     val searchQuery: StateFlow<String> = _searchQuery.asStateFlow()
@@ -174,8 +186,228 @@ class MainViewModel(private val context: Context) : ViewModel() {
     private val _anilistSyncThreshold = MutableStateFlow(settingsManager.getAniListSyncThreshold())
     val anilistSyncThreshold: StateFlow<Int> = _anilistSyncThreshold.asStateFlow()
 
+
+
     private val _showMergeDialog = MutableStateFlow(false)
     val showMergeDialog: StateFlow<Boolean> = _showMergeDialog.asStateFlow()
+
+    // Profile state
+    private val _userProfile = MutableStateFlow<com.blissless.oni.data.AniListUserProfile?>(null)
+    val userProfile: StateFlow<com.blissless.oni.data.AniListUserProfile?> = _userProfile.asStateFlow()
+
+    private val _userFavorites = MutableStateFlow<List<com.blissless.oni.data.AniListFavorite>>(emptyList())
+    val userFavorites: StateFlow<List<com.blissless.oni.data.AniListFavorite>> = _userFavorites.asStateFlow()
+
+    private val _currentMangaIsFavorited = MutableStateFlow(false)
+    val currentMangaIsFavorited: StateFlow<Boolean> = _currentMangaIsFavorited.asStateFlow()
+
+    private val _userActivity = MutableStateFlow<List<com.blissless.oni.data.AniListUserActivity>>(emptyList())
+    val userActivity: StateFlow<List<com.blissless.oni.data.AniListUserActivity>> = _userActivity.asStateFlow()
+
+    private val _isProfileLoading = MutableStateFlow(false)
+    val isProfileLoading: StateFlow<Boolean> = _isProfileLoading.asStateFlow()
+
+    // Downloaded manga scanning
+    private val _downloadedManga = MutableStateFlow<List<com.blissless.oni.data.DownloadedManga>>(emptyList())
+    val downloadedManga: StateFlow<List<com.blissless.oni.data.DownloadedManga>> = _downloadedManga.asStateFlow()
+
+    private val _downloadedResumeReading = MutableStateFlow<List<DownloadedResumeEntry>>(emptyList())
+    val downloadedResumeReading: StateFlow<List<DownloadedResumeEntry>> = _downloadedResumeReading.asStateFlow()
+
+    private val _isOfflineMode = MutableStateFlow(false)
+    val isOfflineMode: StateFlow<Boolean> = _isOfflineMode.asStateFlow()
+
+    val batchDownloadState: StateFlow<com.blissless.oni.data.BatchDownloadState?> = downloadManager.batchDownloadState
+
+    private var currentOfflineMangaSlug: String? = null
+    private var currentOfflinePageIndex: Int = 0
+    private var lastSavedOfflinePage: Int = -1
+
+    fun scanDownloadedManga() {
+        viewModelScope.launch {
+            // Load from disk cache first for instant UI
+            if (_downloadedManga.value.isEmpty()) {
+                val cached = withContext(Dispatchers.IO) { downloadManager.loadScanCache() }
+                if (cached != null) {
+                    _downloadedManga.value = cached
+                    buildResumeEntries(cached)
+                }
+            }
+
+            // Full scan in background
+            val scanned = withContext(Dispatchers.IO) { downloadManager.scanDownloadedManga() }
+            _downloadedManga.value = scanned
+            buildResumeEntries(scanned)
+
+            // Save to cache for next startup
+            withContext(Dispatchers.IO) { downloadManager.saveScanCache(scanned) }
+        }
+    }
+
+    private fun buildResumeEntries(mangaList: List<com.blissless.oni.data.DownloadedManga>) {
+        val resumeEntries = mutableListOf<DownloadedResumeEntry>()
+        for (manga in mangaList) {
+            if (manga.lastReadChapter != null && manga.lastReadChapter > 0) {
+                val pageIndex = downloadManager.getLastReadPageIndex(manga.slug)
+                val chapterPages = manga.chapters.find { it.chapterNumber == manga.lastReadChapter }?.pageCount ?: 1
+                resumeEntries.add(DownloadedResumeEntry(
+                    title = manga.title,
+                    slug = manga.slug,
+                    coverPath = manga.coverPath,
+                    currentChapter = manga.lastReadChapter,
+                    totalChapters = manga.chapters.size,
+                    mangaId = null,
+                    scrollProgress = if (chapterPages > 0) pageIndex.toFloat() / chapterPages.toFloat() else 0f
+                ))
+            }
+        }
+        _downloadedResumeReading.value = resumeEntries.sortedByDescending { it.currentChapter }
+    }
+
+    fun getCompletedChapterNumbers(mangaTitle: String): Set<Double> =
+        downloadManager.getCompletedChapterNumbers(mangaTitle)
+
+    private val _downloadedChapterNumbers = MutableStateFlow<Set<Double>>(emptySet())
+    val downloadedChapterNumbers: StateFlow<Set<Double>> = _downloadedChapterNumbers.asStateFlow()
+
+    fun loadDownloadedChapterNumbers(mangaTitle: String) {
+        viewModelScope.launch {
+            val nums = withContext(Dispatchers.IO) { downloadManager.getCompletedChapterNumbers(mangaTitle) }
+            _downloadedChapterNumbers.value = nums
+        }
+    }
+
+    fun saveCoverImage(mangaTitle: String, coverUrl: String) =
+        downloadManager.saveCoverImage(mangaTitle, coverUrl)
+
+    fun discardOfflineProgress(mangaSlug: String) {
+        downloadManager.clearLastReadChapter(mangaSlug)
+        _downloadedResumeReading.value = _downloadedResumeReading.value.filter { it.slug != mangaSlug }
+        scanDownloadedManga()
+    }
+
+    fun loadOfflineChapterImages(mangaTitle: String, chapterNumber: Double) {
+        viewModelScope.launch {
+            _isLoading.value = true
+            _isOfflineMode.value = true
+            currentMangaTitle = mangaTitle
+            currentMangaId = "offline_${mangaTitle}"
+
+            var manga = _downloadedManga.value.find { it.title == mangaTitle || it.slug == mangaTitle }
+            if (manga == null) {
+                val downloaded = withContext(Dispatchers.IO) { downloadManager.scanDownloadedManga() }
+                _downloadedManga.value = downloaded
+                manga = downloaded.find { it.title == mangaTitle || it.slug == mangaTitle }
+            }
+            if (manga != null) {
+                currentOfflineMangaSlug = manga.slug
+
+                val savedChapter = withContext(Dispatchers.IO) { downloadManager.getLastReadChapter(manga.slug) }
+                val savedPageIndex = withContext(Dispatchers.IO) { downloadManager.getLastReadPageIndex(manga.slug) }
+
+                _chapters.value = manga.chapters.map { ch ->
+                    ChapterInfo(url = "offline://${manga.slug}/chapter-${ch.chapterNumber}", title = "Chapter ${ch.chapterNumber}", chapterId = "", volume = null)
+                }
+                val targetIndex = manga.chapters.indexOfFirst { it.chapterNumber == chapterNumber }
+                _selectedChapterIndex.value = targetIndex.coerceAtLeast(0)
+
+                val files = withContext(Dispatchers.IO) {
+                    downloadManager.getDownloadedPagesByMangaAndChapter(mangaTitle, chapterNumber)
+                }
+
+                val restorePageIndex = if (savedChapter == chapterNumber) savedPageIndex else 0
+                currentOfflinePageIndex = restorePageIndex
+                lastSavedOfflinePage = -1
+                downloadManager.saveLastReadChapter(manga.slug, chapterNumber, restorePageIndex)
+
+                val pageCount = files.size
+                _resumeScrollProgress.value = if (pageCount > 0) restorePageIndex.toFloat() / pageCount.toFloat() else 0f
+
+                if (files.isNotEmpty()) {
+                    _chapterImages.value = UiState.Success(ChapterImages(chapterUrl = "offline://$mangaTitle/ch$chapterNumber", images = files.map { it.absolutePath }))
+                } else {
+                    _chapterImages.value = UiState.Error("No offline pages found")
+                }
+            } else {
+                val files = withContext(Dispatchers.IO) {
+                    downloadManager.getDownloadedPagesByMangaAndChapter(mangaTitle, chapterNumber)
+                }
+                if (files.isNotEmpty()) {
+                    _chapterImages.value = UiState.Success(ChapterImages(chapterUrl = "offline://$mangaTitle/ch$chapterNumber", images = files.map { it.absolutePath }))
+                } else {
+                    _chapterImages.value = UiState.Error("No offline pages found")
+                }
+            }
+            _isLoading.value = false
+        }
+    }
+
+    fun selectOfflineChapter(mangaTitle: String, chapterNumber: Double) {
+        viewModelScope.launch {
+            _isLoading.value = true
+            var manga = _downloadedManga.value.find { it.title == mangaTitle || it.slug == mangaTitle }
+            if (manga == null) {
+                val downloaded = withContext(Dispatchers.IO) { downloadManager.scanDownloadedManga() }
+                _downloadedManga.value = downloaded
+                manga = downloaded.find { it.title == mangaTitle || it.slug == mangaTitle }
+            }
+            if (manga != null) {
+                currentOfflinePageIndex = 0
+                downloadManager.saveLastReadChapter(manga.slug, chapterNumber, 0)
+            }
+            val files = withContext(Dispatchers.IO) {
+                downloadManager.getDownloadedPagesByMangaAndChapter(mangaTitle, chapterNumber)
+            }
+            if (files.isNotEmpty()) {
+                _chapterImages.value = UiState.Success(ChapterImages(chapterUrl = "offline://$mangaTitle/ch$chapterNumber", images = files.map { it.absolutePath }))
+            } else {
+                _chapterImages.value = UiState.Error("No offline pages found")
+            }
+            _isLoading.value = false
+        }
+    }
+
+    // Tracking counts for profile stats
+    private val _readingCount = MutableStateFlow(0)
+    val readingCount: StateFlow<Int> = _readingCount.asStateFlow()
+
+    private val _completedCount = MutableStateFlow(0)
+    val completedCount: StateFlow<Int> = _completedCount.asStateFlow()
+
+    private val _planningCount = MutableStateFlow(0)
+    val planningCount: StateFlow<Int> = _planningCount.asStateFlow()
+
+    private val _onHoldCount = MutableStateFlow(0)
+    val onHoldCount: StateFlow<Int> = _onHoldCount.asStateFlow()
+
+    private val _droppedCount = MutableStateFlow(0)
+    val droppedCount: StateFlow<Int> = _droppedCount.asStateFlow()
+
+    fun getAvatarUrl(): String? = anilistManager.getAvatarUrl()
+
+    fun loadUserProfile() {
+        if (!anilistManager.isLoggedIn()) return
+        _isProfileLoading.value = true
+        viewModelScope.launch {
+            val profileResult = anilistManager.getUserProfile()
+            profileResult.onSuccess { _userProfile.value = it }
+            profileResult.onFailure { log("PROFILE", "Failed to load profile: ${it.message}") }
+            val favResult = anilistManager.getUserFavorites()
+            favResult.onSuccess { _userFavorites.value = it }
+            favResult.onFailure { log("PROFILE", "Failed to load favorites: ${it.message}") }
+            val actResult = anilistManager.getUserActivity()
+            actResult.onSuccess { activities ->
+                _userActivity.value = activities
+                _readingCount.value = activities.count { it.status.equals("CURRENT", true) || it.status.equals("REPEATING", true) }
+                _completedCount.value = activities.count { it.status.equals("COMPLETED", true) }
+                _planningCount.value = activities.count { it.status.equals("PLANNING", true) }
+                _onHoldCount.value = activities.count { it.status.equals("PAUSED", true) || it.status.equals("HOLD", true) }
+                _droppedCount.value = activities.count { it.status.equals("DROPPED", true) }
+            }
+            actResult.onFailure { log("PROFILE", "Failed to load activity: ${it.message}") }
+            _isProfileLoading.value = false
+        }
+    }
 
     private var pendingAnilistUpdate: Job? = null
 
@@ -301,11 +533,41 @@ class MainViewModel(private val context: Context) : ViewModel() {
         // user swipes to the Explore tab. Previously this only loaded when the
         // user first opened ExploreScreen, causing a visible loading spinner.
         loadExplorePage()
+
+        // Pre-load downloaded manga cache so DownloadsScreen shows data instantly
+        viewModelScope.launch {
+            val cached = withContext(Dispatchers.IO) { downloadManager.loadScanCache() }
+            if (cached != null) {
+                _downloadedManga.value = cached
+                buildResumeEntries(cached)
+            }
+        }
     }
 
     fun setCheckUpdatesOnStart(enabled: Boolean) {
         settingsManager.setCheckUpdatesOnStart(enabled)
         _checkUpdatesOnStart.value = enabled
+    }
+
+    fun checkCurrentMangaFavorite() {
+        val mediaId = currentMediaId ?: return
+        viewModelScope.launch {
+            val favs = anilistManager.getUserFavorites()
+            favs.onSuccess { list ->
+                _currentMangaIsFavorited.value = list.any { it.id == mediaId }
+            }
+        }
+    }
+
+    fun toggleCurrentMangaFavorite() {
+        val mediaId = currentMediaId ?: return
+        viewModelScope.launch {
+            val result = anilistManager.toggleFavorite(mediaId)
+            result.onSuccess { isFavorited ->
+                _currentMangaIsFavorited.value = isFavorited
+            }
+            result.onFailure { log("FAVORITE", "Failed to toggle favorite: ${it.message}") }
+        }
     }
 
     fun checkForUpdatesSilently() {
@@ -389,9 +651,21 @@ class MainViewModel(private val context: Context) : ViewModel() {
 
     fun refreshTrackingLists() {
         val allReading = trackingManager.getContinueReading()
-        _resumeReading.value = allReading.filter { it.scrollProgress > 0f }
-        _continueReading.value = allReading.filter { it.currentChapterNumber > 0 }
+
+        _resumeReading.value = allReading.filter {
+            it.scrollProgress > 0f
+        }
+        _continueReading.value = allReading.filter {
+            it.currentChapterNumber > 0
+        }
         _planningToRead.value = trackingManager.getPlanningToRead()
+
+        val allTracks = trackingManager.getAllTracking()
+        _readingCount.value = allTracks.count { it.status == ReadingStatus.READING }
+        _completedCount.value = allTracks.count { it.status == ReadingStatus.COMPLETED }
+        _planningCount.value = allTracks.count { it.status == ReadingStatus.PLANNING }
+        _onHoldCount.value = allTracks.count { it.status == ReadingStatus.ON_HOLD }
+        _droppedCount.value = allTracks.count { it.status == ReadingStatus.DROPPED }
     }
 
     fun addToPlanning(mangaId: String, title: String, coverUrl: String?, mangaUrl: String, totalChapters: Int) {
@@ -537,6 +811,10 @@ class MainViewModel(private val context: Context) : ViewModel() {
             loadAniListChapters(manga.id)
             loadReadChapters(mangaId)
         }
+    }
+
+    fun selectMangaById(mediaId: Int) {
+        selectManga(AniListSearchResult(id = mediaId, title = ""))
     }
 
     fun selectManga(manga: MangaSearchResult) {
@@ -1110,6 +1388,26 @@ class MainViewModel(private val context: Context) : ViewModel() {
         _isChapterRead.value = false
         _isLoading.value = true
         val chapter = _chapters.value.getOrNull(index)
+
+        if (_isOfflineMode.value) {
+            val url = chapter?.url ?: ""
+            val slug = url.substringAfter("offline://").substringBefore("/chapter-")
+            val chNumStr = url.substringAfter("chapter-").toDoubleOrNull() ?: 0.0
+            val mangaTitle = currentMangaTitle ?: slug
+            viewModelScope.launch {
+                val files = withContext(Dispatchers.IO) {
+                    downloadManager.getDownloadedPagesByMangaAndChapter(mangaTitle, chNumStr)
+                }
+                if (files.isNotEmpty()) {
+                    _chapterImages.value = UiState.Success(ChapterImages(chapterUrl = url, images = files.map { it.absolutePath }))
+                } else {
+                    _chapterImages.value = UiState.Error("No offline pages found")
+                }
+                _isLoading.value = false
+            }
+            return
+        }
+
         currentMangaId?.let { mangaId ->
             val tracking = trackingManager.getMangaTracking(mangaId)
             if (tracking != null && index < tracking.currentChapterIndex) {
@@ -1215,6 +1513,38 @@ class MainViewModel(private val context: Context) : ViewModel() {
         val threshold = _anilistSyncThreshold.value / 100f
         if (_selectedChapterIndex.value < 0) return
         if (!scrollPercent.isFinite()) return
+
+        // Offline mode: save page index to .lastread for resume
+        if (_isOfflineMode.value) {
+            val mangaSlug = currentOfflineMangaSlug ?: return
+            val chapter = _chapters.value.getOrNull(_selectedChapterIndex.value) ?: return
+            val chNumStr = chapter.url.substringAfter("chapter-").toDoubleOrNull() ?: return
+
+            // Only update when page actually changes
+            if (currentOfflinePageIndex != lastSavedOfflinePage) {
+                lastSavedOfflinePage = currentOfflinePageIndex
+                downloadManager.saveLastReadChapter(mangaSlug, chNumStr, currentOfflinePageIndex)
+
+                // Update resume entry immediately so the UI reflects progress without a full scan
+                val totalChapters = _chapters.value.size
+                val manga = _downloadedManga.value.find { it.slug == mangaSlug }
+                val chapterPages = manga?.chapters?.find { it.chapterNumber == chNumStr }?.pageCount ?: 1
+                val currentEntry = _downloadedResumeReading.value.find { it.slug == mangaSlug }
+                val scrollProgress = if (chapterPages > 0) currentOfflinePageIndex.toFloat() / chapterPages.toFloat() else 0f
+                val updatedEntry = DownloadedResumeEntry(
+                    title = currentMangaTitle ?: mangaSlug,
+                    slug = mangaSlug,
+                    coverPath = currentEntry?.coverPath ?: manga?.coverPath,
+                    currentChapter = chNumStr,
+                    totalChapters = totalChapters,
+                    mangaId = null,
+                    scrollProgress = scrollProgress
+                )
+                _downloadedResumeReading.value = (_downloadedResumeReading.value.filter { it.slug != mangaSlug } + updatedEntry)
+                    .sortedByDescending { it.currentChapter }
+            }
+            return
+        }
 
         currentMangaId?.let { mangaId ->
             val chapter = _chapters.value.getOrNull(_selectedChapterIndex.value)
@@ -1453,6 +1783,8 @@ class MainViewModel(private val context: Context) : ViewModel() {
         _chapters.value = emptyList()
         _selectedChapterIndex.value = -1
         _chapterImages.value = UiState.Idle
+        _isOfflineMode.value = false
+        currentOfflineMangaSlug = null
         refreshTrackingLists()
     }
 
@@ -1464,6 +1796,75 @@ class MainViewModel(private val context: Context) : ViewModel() {
         currentMangaDexId = null
         _mangaDexChapterCount.value = null
         _mangaDexVolumeCount.value = null
+    }
+
+    // ======================== Downloads ========================
+
+    fun downloadChapter(
+        mangaTitle: String,
+        mangaId: String,
+        chapterNumber: Double,
+        chapterUrl: String,
+        imageUrls: List<String>
+    ) {
+        downloadManager.startDownload(
+            mangaTitle = mangaTitle,
+            mangaId = mangaId,
+            chapterNumber = chapterNumber,
+            chapterTitle = "Chapter $chapterNumber",
+            chapterUrl = chapterUrl,
+            imageUrls = imageUrls
+        )
+    }
+
+    fun downloadSelectedChapters(
+        mangaTitle: String,
+        mangaId: String,
+        chapters: List<Triple<Double, String, List<String>>>
+    ) {
+        downloadManager.startBatchDownload(mangaTitle, mangaId, chapters)
+    }
+
+    fun cancelDownload(taskId: String) = downloadManager.cancelDownload(taskId)
+    fun removeDownload(taskId: String) = downloadManager.removeTask(taskId)
+    fun getDownloadDirectory(): String = downloadManager.getDownloadDirectory()
+    fun setDownloadDirectory(path: String) = downloadManager.setDownloadDirectory(path)
+    fun getDownloadedChapterIds(mangaId: String): Set<String> = downloadManager.getDownloadedChapterIds(mangaId)
+
+    fun deleteManga(mangaSlug: String) {
+        downloadManager.deleteManga(mangaSlug)
+        scanDownloadedManga()
+    }
+
+    fun deleteChapter(mangaSlug: String, chapterNumber: Double) {
+        downloadManager.deleteChapter(mangaSlug, chapterNumber)
+        scanDownloadedManga()
+    }
+
+    fun moveDownloadsToDirectory(newDir: String, onDone: () -> Unit = {}) {
+        downloadManager.moveDownloadsToDirectory(newDir, onDone)
+    }
+
+    /**
+     * Fetch page images for a chapter via the selected extension (for downloads).
+     * Runs the ContentProvider query on the IO dispatcher.
+     */
+    fun fetchChapterImagesForDownload(
+        mangaTitle: String,
+        chapterNumber: String,
+        onResult: (Result<List<String>>) -> Unit
+    ) {
+        val authority = _selectedExtensionAuthority.value
+        if (authority == null) {
+            onResult(Result.failure(Exception("No extension selected")))
+            return
+        }
+        viewModelScope.launch {
+            val result = withContext(Dispatchers.IO) {
+                fetchImagesFromExtension(mangaTitle, chapterNumber, authority)
+            }
+            onResult(result)
+        }
     }
 
     // ======================== Image Loading (Extensions) ========================
@@ -1901,6 +2302,10 @@ class MainViewModel(private val context: Context) : ViewModel() {
         _resumeScrollProgress.value = -1f
     }
 
+    fun updateOfflinePageIndex(pageIndex: Int) {
+        currentOfflinePageIndex = pageIndex
+    }
+
     fun clearResumeProgress(mangaId: String) {
         trackingManager.removeTracking(mangaId)
         refreshTrackingLists()
@@ -1915,6 +2320,8 @@ class MainViewModel(private val context: Context) : ViewModel() {
         settingsManager.setAniListSyncThreshold(percent)
         _anilistSyncThreshold.value = percent
     }
+
+
 
     private fun stripHtml(html: String): String {
         return if (android.os.Build.VERSION.SDK_INT >= android.os.Build.VERSION_CODES.N) {
