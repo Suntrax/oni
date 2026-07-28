@@ -1110,12 +1110,19 @@ class AniListManager(private val context: Context) {
             val mangaId = "anilist_${entry.mediaId}"
             val existing = trackingManager.getMangaTracking(mangaId)
             if (existing != null) {
+                val anilistIndex = (entry.progress - 1).coerceAtLeast(0)
+                val anilistChapterNum = entry.progress.toDouble()
+                // Only advance the local progress; never regress it, since the
+                // user may have read further locally since the last sync.
+                val shouldAdvance = anilistChapterNum > existing.currentChapterNumber && existing.currentChapterNumber >= 0
                 val updated = existing.copy(
                     status = entry.toReadingStatus(),
                     totalChapters = entry.chapters ?: existing.totalChapters,
                     lastReadTimestamp = System.currentTimeMillis(),
                     anilistMediaId = entry.mediaId,
-                    scrollProgress = 0f
+                    currentChapterIndex = if (shouldAdvance) anilistIndex else existing.currentChapterIndex,
+                    currentChapterNumber = if (shouldAdvance) anilistChapterNum else existing.currentChapterNumber,
+                    scrollProgress = if (shouldAdvance) 0f else existing.scrollProgress
                 )
                 trackingManager.updateTracking(updated)
             } else {

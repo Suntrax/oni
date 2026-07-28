@@ -691,6 +691,7 @@ fun ChapterListWithGroups(
                     totalCount = totalCount,
                     progress = progress,
                     nextChapterToRead = nextChapterToRead,
+                    chapters = chapters,
                     onContinueReading = onContinueReading ?: {
                         if (nextChapterToRead != null) onChapterClick(nextChapterToRead!!)
                     },
@@ -830,6 +831,7 @@ private fun ChapterListHeader(
     totalCount: Int,
     progress: Float,
     nextChapterToRead: Int?,
+    chapters: List<ChapterInfo>,
     onContinueReading: () -> Unit,
     onBack: (() -> Unit)? = null
 ) {
@@ -922,8 +924,15 @@ private fun ChapterListHeader(
                     letterSpacing = 0.3.sp
                 )
                 Spacer(modifier = Modifier.width(4.dp))
+                val nextChapterDisplay = if (nextChapterToRead != null && nextChapterToRead in chapters.indices) {
+                    val chTitle = chapters[nextChapterToRead].title ?: ""
+                    val num = extractChapterNum(chTitle)
+                    if (num != "?") num else "${nextChapterToRead + 1}"
+                } else {
+                    "${nextChapterToRead?.plus(1) ?: ""}"
+                }
                 Text(
-                    text = "· Ch. ${nextChapterToRead + 1}",
+                    text = "· Ch. $nextChapterDisplay",
                     fontWeight = FontWeight.Medium,
                     color = Color.White.copy(alpha = 0.8f)
                 )

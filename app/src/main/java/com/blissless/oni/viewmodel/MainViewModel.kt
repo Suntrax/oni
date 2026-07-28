@@ -1393,6 +1393,8 @@ class MainViewModel(private val context: Context) : ViewModel() {
 
             _isLoading.value = false
 
+            recalculateNextChapterFromTracking(chapterList)
+
             val savedIndex = _selectedChapterIndex.value
             if (savedIndex > 0 && savedIndex < chapterList.size) {
                 selectChapter(savedIndex)
@@ -1400,6 +1402,38 @@ class MainViewModel(private val context: Context) : ViewModel() {
                 selectChapter(0)
             }
         }
+    }
+
+    /**
+     * Recalculate [_nextChapterToRead] and [_readChapterIndices] from the
+     * persisted tracking data so they stay correct when the chapter list
+     * changes (e.g. after switching the default extension).
+     *
+     * Uses chapter-number matching (not index) so the result is extension-
+     * agnostic.
+     */
+    private fun recalculateNextChapterFromTracking(chapterList: List<ChapterInfo>) {
+        val mangaId = currentMangaId ?: return
+        val tracking = trackingManager.getMangaTracking(mangaId) ?: return
+
+        val savedUrl = tracking.currentChapterUrl
+        var currentPosition = -1
+
+        if (savedUrl.isNotBlank()) {
+            currentPosition = chapterList.indexOfFirst { it.url == savedUrl }
+        }
+
+        if (currentPosition < 0 && tracking.currentChapterNumber > 0) {
+            currentPosition = findChapterByNumber(chapterList, tracking.currentChapterNumber)
+        }
+
+        if (currentPosition < 0) {
+            currentPosition = tracking.currentChapterIndex.coerceIn(0, chapterList.lastIndex.coerceAtLeast(0))
+        }
+
+        val safeIndex = currentPosition.coerceIn(0, chapterList.lastIndex.coerceAtLeast(0))
+        _nextChapterToRead.value = safeIndex + 1
+        _readChapterIndices.value = (0 until safeIndex).toSet()
     }
 
     // ======================== Chapter Selection & Reading ========================
@@ -1464,6 +1498,7 @@ class MainViewModel(private val context: Context) : ViewModel() {
             _isLoading.value = true
             generateAndLoadChapters(mediaId)
         } else {
+            recalculateNextChapterFromTracking(_chapters.value)
             _isLoading.value = false
         }
     }
@@ -2128,21 +2163,17 @@ class MainViewModel(private val context: Context) : ViewModel() {
                 onSuccess = { entries ->
                     Log.d("ANILIST", "Fetched ${entries.size} entries from AniList")
                 },
-                onFailure = { Log.e("ANILIST", "Sync failed: ${it.message}") }
+                onFailure = {
+                    Log.e("ANILIST", "Sync failed: ${it.message}")
+                    _isAniListSyncing.value = false
+                    return@launch
+                }
             )
             val entries = anilistManager.getSyncedManga()
-            val matched = mutableListOf<com.blissless.oni.data.AniListMangaEntry>()
-            for (entry in entries) {
-                if (entry.status in setOf("CURRENT", "PLANNING", "REPEATING")) {
-                    matched.add(entry)
-                } else {
-                    matched.add(entry)
-                }
-            }
-            anilistManager.createTrackingEntries(matched, trackingManager)
+            anilistManager.createTrackingEntries(entries, trackingManager)
             refreshTrackingLists()
             _anilistUsername.value = anilistManager.getLoggedInUser()
-            Log.d("ANILIST", "Synced ${matched.size} manga entries")
+            Log.d("ANILIST", "Synced ${entries.size} manga entries")
             _isAniListSyncing.value = false
 
             // After the AniList sync has populated tracking entries, kick off a

@@ -565,7 +565,7 @@ fun DownloadsScreen(
                                     selectedIndex = -1,
                                     readChapterIndices = emptySet(),
                                     nextChapterToRead = null,
-                                    initiallyExpanded = true,
+                                    initiallyExpanded = false,
                                     onChapterClick = { absIdx ->
                                         mangaForChapterList = null
                                         onReadOffline(manga.title, filteredChapters[absIdx].chapterNumber)
