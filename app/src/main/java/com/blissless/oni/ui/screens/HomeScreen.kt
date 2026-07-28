@@ -1,5 +1,13 @@
 package com.blissless.oni.ui.screens
 
+import androidx.activity.compose.BackHandler
+import androidx.compose.animation.AnimatedVisibility
+import androidx.compose.animation.core.FastOutSlowInEasing
+import androidx.compose.animation.core.tween
+import androidx.compose.animation.fadeIn
+import androidx.compose.animation.fadeOut
+import androidx.compose.animation.slideInVertically
+import androidx.compose.animation.slideOutVertically
 import androidx.compose.foundation.background
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.Arrangement
@@ -409,6 +417,12 @@ fun HomeScreen(
     var showStatusDialog by remember { mutableStateOf(false) }
     var selectedTrack by remember { mutableStateOf<MangaTrack?>(null) }
 
+    var showStatusListScreen by remember { mutableStateOf(false) }
+    var statusListTitle by remember { mutableStateOf("") }
+    var statusListIcon by remember { mutableStateOf(Icons.Default.PlayArrow) }
+    var statusListType by remember { mutableStateOf("") }
+    var statusListTracks by remember { mutableStateOf<List<MangaTrack>>(emptyList()) }
+
     LaunchedEffect(Unit) {
         viewModel.refreshTrackingLists()
     }
@@ -601,7 +615,13 @@ fun HomeScreen(
                     icon = Icons.Default.PlayArrow,
                     count = resumeReading.size,
                     iconTint = HomeStatusColors.getColor("CURRENT"),
-                    onClick = {}
+                    onClick = {
+                        statusListTitle = "Resume Reading"
+                        statusListIcon = Icons.Default.PlayArrow
+                        statusListType = "CURRENT"
+                        statusListTracks = resumeReading
+                        showStatusListScreen = true
+                    }
                 )
                 Spacer(modifier = Modifier.height(12.dp))
                 androidx.compose.foundation.lazy.LazyRow(
@@ -627,7 +647,13 @@ fun HomeScreen(
                     icon = Icons.Default.PlayArrow,
                     count = continueReading.size,
                     iconTint = HomeStatusColors.getColor("CURRENT"),
-                    onClick = {}
+                    onClick = {
+                        statusListTitle = "Continue Reading"
+                        statusListIcon = Icons.Default.PlayArrow
+                        statusListType = "CURRENT"
+                        statusListTracks = continueReading
+                        showStatusListScreen = true
+                    }
                 )
                 Spacer(modifier = Modifier.height(12.dp))
                 MangaHorizontalList(
@@ -655,7 +681,13 @@ fun HomeScreen(
                     icon = Icons.Default.Bookmark,
                     count = planningToRead.size,
                     iconTint = HomeStatusColors.getColor("PLANNING"),
-                    onClick = {}
+                    onClick = {
+                        statusListTitle = "Planning to Read"
+                        statusListIcon = Icons.Default.Bookmark
+                        statusListType = "PLANNING"
+                        statusListTracks = planningToRead
+                        showStatusListScreen = true
+                    }
                 )
                 Spacer(modifier = Modifier.height(12.dp))
                 MangaHorizontalList(
@@ -704,6 +736,39 @@ fun HomeScreen(
         }
 
         Spacer(modifier = Modifier.height(80.dp))
+    }
+
+    BackHandler(enabled = showStatusListScreen) { showStatusListScreen = false }
+
+    AnimatedVisibility(
+        visible = showStatusListScreen,
+        enter = slideInVertically(
+            animationSpec = tween(durationMillis = 300, easing = FastOutSlowInEasing),
+            initialOffsetY = { fullHeight -> (fullHeight * 0.15f).toInt() }
+        ) + fadeIn(animationSpec = tween(durationMillis = 300, easing = FastOutSlowInEasing)),
+        exit = slideOutVertically(
+            animationSpec = tween(durationMillis = 250, easing = FastOutSlowInEasing),
+            targetOffsetY = { fullHeight -> (fullHeight * 0.15f).toInt() }
+        ) + fadeOut(animationSpec = tween(durationMillis = 250, easing = FastOutSlowInEasing))
+    ) {
+        StatusListScreen(
+            title = statusListTitle,
+            icon = statusListIcon,
+            mangaList = statusListTracks,
+            listType = statusListType,
+            onMangaClick = { track ->
+                val manga = MangaSearchResult(
+                    title = track.title,
+                    url = track.mangaUrl,
+                    coverUrl = track.coverUrl,
+                    mangaId = track.mangaId
+                )
+                onMangaSelected(manga)
+                showStatusListScreen = false
+            },
+            onBackClick = { showStatusListScreen = false },
+            onDismiss = { showStatusListScreen = false }
+        )
     }
 
     if (showStatusDialog && selectedTrack != null) {

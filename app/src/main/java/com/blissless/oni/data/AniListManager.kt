@@ -103,7 +103,7 @@ data class AniListUserProfile(
     val about: String?,
     val createdAt: Long?,
     val chaptersRead: Int,
-    val mangaRead: Int,
+    val mangaCount: Int,
     val meanScore: Float,
     val minutesWatched: Int
 )
@@ -127,7 +127,10 @@ data class AniListUserActivity(
     val status: String,
     val score: Int?,
     val updatedAt: Long,
-    val mediaId: Int = 0
+    val mediaId: Int = 0,
+    val createdAt: Long = 0L,
+    val statusAction: String = "",
+    val progressText: String = ""
 )
 
 data class ExploreSection(
@@ -702,13 +705,6 @@ class AniListManager(private val context: Context) {
                 avatar { large }
                 bannerImage
                 createdAt
-                statistics {
-                  manga {
-                    chaptersRead
-                    meanScore
-                    minutesWatched
-                  }
-                }
               }
             }
         """.trimIndent()
@@ -719,18 +715,17 @@ class AniListManager(private val context: Context) {
                     onSuccess = { data ->
                         val viewer = data.optJSONObject("Viewer")
                             ?: return@fold Result.failure(Exception("No Viewer data"))
-                        val stats = viewer.optJSONObject("statistics")?.optJSONObject("manga")
-                        Log.d("AniList", "Viewer name=${viewer.optString("name")}, bannerImage=${viewer.opt("bannerImage")}, about=${viewer.opt("about")}, createdAt=${viewer.opt("createdAt")}, stats=$stats")
+                        Log.d("AniList", "Viewer name=${viewer.optString("name")}, bannerImage=${viewer.opt("bannerImage")}, about=${viewer.opt("about")}, createdAt=${viewer.opt("createdAt")}")
                         Result.success(AniListUserProfile(
                             name = viewer.optString("name", ""),
                             avatarUrl = viewer.optJSONObject("avatar")?.optString("large"),
                             bannerUrl = viewer.optString("bannerImage").takeIf { it.isNotBlank() && it != "null" },
                             about = viewer.optString("about").takeIf { it.isNotBlank() && it != "null" },
                             createdAt = viewer.optLong("createdAt").takeIf { it > 0 },
-                            chaptersRead = stats?.optInt("chaptersRead", 0) ?: 0,
-                            mangaRead = 0,
-                            meanScore = stats?.optDouble("meanScore", 0.0)?.toFloat() ?: 0f,
-                            minutesWatched = stats?.optInt("minutesWatched", 0) ?: 0
+                            chaptersRead = 0,
+                            mangaCount = 0,
+                            meanScore = 0f,
+                            minutesWatched = 0
                         ))
                     },
                     onFailure = { Result.failure(it) }
@@ -851,20 +846,83 @@ class AniListManager(private val context: Context) {
 
         val query = """
             query (${'$'}userId: Int) {
-              MediaListCollection(userId: ${'$'}userId, type: MANGA) {
-                lists {
-                  name
-                  entries {
+              Page(page: 1, perPage: 50) {
+                activities(userId: ${'$'}userId, type: MANGA_LIST, sort: ID_DESC) {
+                  ... on ListActivity {
+                    createdAt
+                    status
+                    progress
+                    user {
+                      name
+                    }
                     media {
                       id
                       title { romaji english }
                       coverImage { large }
                       chapters
                     }
+                  }
+                }
+              }
+            }
+        """.trimIndent()
+        return withContext(Dispatchers.IO) {
+            try {
+                val variables = JSONObject().apply { put("userId", userId) }
+                val result = executeGraphQLRaw(query, variables)
+                result.fold(
+                    onSuccess = { respData ->
+                        val page = respData.optJSONObject("Page")
+                        val activitiesJson = page?.optJSONArray("activities")
+                        val activities = mutableListOf<AniListUserActivity>()
+                        if (activitiesJson != null) {
+                            for (i in 0 until activitiesJson.length()) {
+                                val entry = activitiesJson.optJSONObject(i) ?: continue
+                                val media = entry.optJSONObject("media") ?: continue
+                                val title = media.optJSONObject("title") ?: continue
+                                val status = entry.optString("status", "").let { if (it == "null") "" else it }
+                                val progressStr = entry.optString("progress", "").let { if (it == "null") "" else it }
+                                val progressNum = progressStr.filter { it.isDigit() }.split("-").lastOrNull()?.toIntOrNull() ?: 0
+                                activities.add(AniListUserActivity(
+                                    mangaTitle = title.optString("english")?.takeIf { it.isNotBlank() && it != "null" }
+                                        ?: title.optString("romaji") ?: "",
+                                    coverUrl = media.optJSONObject("coverImage")?.optString("large"),
+                                    progress = progressNum,
+                                    totalChapters = media.optInt("chapters", 0).takeIf { it > 0 },
+                                    status = status,
+                                    score = 0,
+                                    updatedAt = entry.optLong("createdAt", 0),
+                                    mediaId = media.optInt("id", 0),
+                                    createdAt = entry.optLong("createdAt", 0),
+                                    statusAction = status,
+                                    progressText = progressStr
+                                ))
+                            }
+                        }
+                        Result.success(activities)
+                    },
+                    onFailure = { Result.failure(it) }
+                )
+            } catch (e: Exception) {
+                Result.failure(e)
+            }
+        }
+    }
+
+    suspend fun getUserMangaListStats(): Result<Triple<Int, Int, Float>> {
+        val userResult = getUserInfo()
+        val data = userResult.getOrNull() ?: return Result.failure(Exception("Failed to get user info"))
+        val viewer = data.optJSONObject("Viewer") ?: return Result.failure(Exception("No Viewer data"))
+        val userId = viewer.optInt("id", -1)
+        if (userId < 0) return Result.failure(Exception("Invalid user ID"))
+
+        val query = """
+            query (${'$'}userId: Int) {
+              MediaListCollection(userId: ${'$'}userId, type: MANGA) {
+                lists {
+                  entries {
                     progress
-                    status
                     score
-                    updatedAt
                   }
                 }
               }
@@ -878,31 +936,25 @@ class AniListManager(private val context: Context) {
                     onSuccess = { respData ->
                         val collection = respData.optJSONObject("MediaListCollection")
                         val lists = collection?.optJSONArray("lists")
-                        val activities = mutableListOf<AniListUserActivity>()
+                        var totalChapters = 0
+                        var totalManga = 0
+                        val scores = mutableListOf<Int>()
                         if (lists != null) {
                             for (i in 0 until lists.length()) {
                                 val entries = lists.getJSONObject(i).optJSONArray("entries")
                                 if (entries != null) {
                                     for (j in 0 until entries.length()) {
                                         val entry = entries.getJSONObject(j)
-                                        val media = entry.optJSONObject("media")
-                                        val title = media?.optJSONObject("title")
-                                        activities.add(AniListUserActivity(
-                                            mangaTitle = title?.optString("english")?.takeIf { it.isNotBlank() && it != "null" }
-                                                ?: title?.optString("romaji") ?: "",
-                                            coverUrl = media?.optJSONObject("coverImage")?.optString("large"),
-                                            progress = entry.optInt("progress", 0),
-                                            totalChapters = media?.optInt("chapters", 0)?.takeIf { it > 0 },
-                                            status = entry.optString("status", ""),
-                                            score = entry.optInt("score", 0).takeIf { it > 0 },
-                                            updatedAt = entry.optLong("updatedAt", 0),
-                                            mediaId = media?.optInt("id", 0) ?: 0
-                                        ))
+                                        totalManga++
+                                        totalChapters += entry.optInt("progress", 0)
+                                        val score = entry.optInt("score", 0)
+                                        if (score > 0) scores.add(score)
                                     }
                                 }
                             }
                         }
-                        Result.success(activities.sortedByDescending { it.updatedAt })
+                        val meanScore = if (scores.isNotEmpty()) scores.average().toFloat() else 0f
+                        Result.success(Triple(totalChapters, totalManga, meanScore))
                     },
                     onFailure = { Result.failure(it) }
                 )

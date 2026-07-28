@@ -35,6 +35,7 @@ import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.foundation.verticalScroll
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.filled.AccountCircle
+import androidx.compose.material.icons.filled.Bookmark
 import androidx.compose.material.icons.filled.Check
 import androidx.compose.material.icons.filled.Close
 import androidx.compose.material.icons.filled.DateRange
@@ -43,6 +44,7 @@ import androidx.compose.material.icons.filled.Favorite
 import androidx.compose.material.icons.filled.History
 import androidx.compose.material.icons.filled.Pause
 import androidx.compose.material.icons.filled.Person
+import androidx.compose.material.icons.filled.PlayArrow
 import androidx.compose.material.icons.filled.Share
 import androidx.compose.material3.Badge
 import androidx.compose.material3.Card
@@ -79,6 +81,8 @@ import com.blissless.oni.data.AniListFavorite
 import com.blissless.oni.data.AniListUserActivity
 import com.blissless.oni.ui.theme.StatusColors
 import com.blissless.oni.ui.theme.StatusCompleted
+import com.blissless.oni.ui.theme.StatusWatching
+import com.blissless.oni.ui.theme.StatusPlanning
 import com.blissless.oni.ui.theme.StatusPaused
 import com.blissless.oni.ui.theme.StatusDropped
 import com.blissless.oni.viewmodel.MainViewModel
@@ -220,6 +224,8 @@ fun ProfileScreen(
                             userBio = userProfile?.about,
                             userCreatedAt = userProfile?.createdAt,
                             meanScore = userProfile?.meanScore,
+                            chaptersRead = userProfile?.chaptersRead ?: 0,
+                            mangaCount = userProfile?.mangaCount ?: 0,
                             activities = userActivity,
                             readingCount = readingCount,
                             completedCount = completedCount,
@@ -358,6 +364,8 @@ private fun AboutMeContent(
     userBio: String? = null,
     userCreatedAt: Long? = null,
     meanScore: Float? = null,
+    chaptersRead: Int = 0,
+    mangaCount: Int = 0,
     activities: List<AniListUserActivity> = emptyList(),
     readingCount: Int = 0,
     completedCount: Int = 0,
@@ -453,19 +461,24 @@ private fun AboutMeContent(
 
             Spacer(modifier = Modifier.height(24.dp))
 
-            // Stats row (manga: chapters read + score only)
-            val totalChaptersRead = activities.sumOf { it.progress }
-            val hasStats = totalChaptersRead > 0 || meanScore != null
+            val hasStats = chaptersRead > 0 || meanScore != null || mangaCount > 0
             if (hasStats) {
                 Row(
                     modifier = Modifier.fillMaxWidth(),
-                    horizontalArrangement = Arrangement.spacedBy(12.dp)
+                    horizontalArrangement = Arrangement.spacedBy(8.dp)
                 ) {
                     Box(Modifier.weight(1f)) {
                         StatCard(
-                            value = totalChaptersRead.toString(),
+                            value = chaptersRead.toString(),
                             label = "Chapters",
                             color = MaterialTheme.colorScheme.primary
+                        )
+                    }
+                    Box(Modifier.weight(1f)) {
+                        StatCard(
+                            value = mangaCount.toString(),
+                            label = "Manga",
+                            color = MaterialTheme.colorScheme.tertiary
                         )
                     }
                     Box(Modifier.weight(1f)) {
@@ -622,9 +635,9 @@ private fun FavoriteCard(fav: AniListFavorite, onClick: () -> Unit) {
             AsyncImage(
                 model = fav.coverUrl, contentDescription = fav.title,
                 modifier = Modifier
-                    .width(50.dp)
-                    .height(70.dp)
-                    .clip(RoundedCornerShape(8.dp)),
+                    .width(60.dp)
+                    .height(84.dp)
+                    .clip(RoundedCornerShape(10.dp)),
                 contentScale = ContentScale.Crop
             )
             Spacer(modifier = Modifier.width(12.dp))
@@ -637,7 +650,6 @@ private fun FavoriteCard(fav: AniListFavorite, onClick: () -> Unit) {
                     maxLines = 2,
                     overflow = TextOverflow.Ellipsis
                 )
-                // Format + year
                 val formatYear = listOfNotNull(
                     fav.format?.replaceFirstChar { it.uppercase() },
                     fav.year?.toString()
@@ -650,7 +662,6 @@ private fun FavoriteCard(fav: AniListFavorite, onClick: () -> Unit) {
                         style = MaterialTheme.typography.labelSmall
                     )
                 }
-                // Score
                 if (fav.score != null && fav.score > 0) {
                     Spacer(modifier = Modifier.height(2.dp))
                     Text(
@@ -665,7 +676,7 @@ private fun FavoriteCard(fav: AniListFavorite, onClick: () -> Unit) {
     }
 }
 
-// ── Tab 3: History (tensei-style) ────────────────────────────────────────
+// ── Tab 3: History (tensei-style with all entry changes) ────────────────────
 
 @Composable
 private fun HistoryContent(activities: List<AniListUserActivity>, onMangaClick: (Int) -> Unit = {}) {
@@ -695,93 +706,88 @@ private fun HistoryContent(activities: List<AniListUserActivity>, onMangaClick: 
 
 @Composable
 private fun HistoryItem(activity: AniListUserActivity, onClick: () -> Unit = {}) {
-    val statusUpper = activity.status.uppercase()
-    val statusKey = when {
-        statusUpper == "REPEATING" -> "CURRENT"
-        statusUpper == "HOLD" -> "ON_HOLD"
-        else -> statusUpper
-    }
-    val statusColor = StatusColors[statusKey] ?: MaterialTheme.colorScheme.onSurfaceVariant
-    val statusLabel = when {
-        statusKey == "CURRENT" -> "Reading"
-        statusKey == "COMPLETED" -> "Completed"
-        statusKey == "PLANNING" -> "Planning"
-        statusKey == "ON_HOLD" -> "On Hold"
-        statusKey == "DROPPED" -> "Dropped"
-        else -> activity.status
+    val actionLower = activity.statusAction.lowercase().let { if (it == "null" || it.isBlank()) "" else it }
+    val (statusIcon, statusColor, statusLabel) = when {
+        actionLower.contains("completed") -> Triple(Icons.Default.Check, StatusCompleted, "Completed")
+        actionLower.contains("reading") || actionLower.contains("repeating") || actionLower.contains("reread") -> Triple(Icons.Default.PlayArrow, StatusWatching, "Read")
+        actionLower.contains("plan") -> Triple(Icons.Default.Bookmark, StatusPlanning, "Planning to Read")
+        actionLower.contains("paused") || actionLower.contains("hold") -> Triple(Icons.Default.Pause, StatusPaused, "On Hold")
+        actionLower.contains("dropped") -> Triple(Icons.Default.Delete, StatusDropped, "Dropped")
+        else -> when (statusKeyFromAction(actionLower)) {
+            "COMPLETED" -> Triple(Icons.Default.Check, StatusCompleted, "Completed")
+            "READING" -> Triple(Icons.Default.PlayArrow, StatusWatching, "Read")
+            "PLANNING" -> Triple(Icons.Default.Bookmark, StatusPlanning, "Planning to Read")
+            "ON_HOLD" -> Triple(Icons.Default.Pause, StatusPaused, "On Hold")
+            "DROPPED" -> Triple(Icons.Default.Delete, StatusDropped, "Dropped")
+            else -> Triple(Icons.Default.PlayArrow, StatusWatching, "Read")
+        }
     }
 
-    val relativeTime = remember(activity.updatedAt) { formatRelativeTime(activity.updatedAt) }
+    val progressDisplay = remember(activity.progressText) {
+        val prog = activity.progressText
+        if (!prog.isNullOrBlank() && prog != "null") {
+            prog.replaceFirstChar { it.uppercase() }
+        } else null
+    }
+
+    val dateStr = remember(activity.createdAt) {
+        if (activity.createdAt > 0) formatHistoryDate(activity.createdAt) else ""
+    }
 
     Card(
         modifier = Modifier.fillMaxWidth().clip(RoundedCornerShape(12.dp)).clickable(onClick = onClick),
         shape = RoundedCornerShape(12.dp),
-        colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.surfaceVariant.copy(alpha = 0.35f))
+        colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.surfaceVariant.copy(alpha = 0.5f))
     ) {
         Row(
-            modifier = Modifier.fillMaxWidth().padding(10.dp),
+            modifier = Modifier.fillMaxWidth().padding(12.dp),
             verticalAlignment = Alignment.CenterVertically
         ) {
             AsyncImage(
                 model = activity.coverUrl, contentDescription = activity.mangaTitle,
                 modifier = Modifier
-                    .width(48.dp)
-                    .height(68.dp)
-                    .clip(RoundedCornerShape(8.dp)),
+                    .width(60.dp)
+                    .height(84.dp)
+                    .clip(RoundedCornerShape(10.dp)),
                 contentScale = ContentScale.Crop
             )
             Spacer(modifier = Modifier.width(12.dp))
             Column(modifier = Modifier.weight(1f)) {
-                // Manga title
                 Text(
                     activity.mangaTitle,
                     color = MaterialTheme.colorScheme.onBackground,
                     style = MaterialTheme.typography.bodyMedium,
-                    fontWeight = FontWeight.SemiBold,
-                    maxLines = 2,
+                    maxLines = 1,
                     overflow = TextOverflow.Ellipsis
                 )
                 Spacer(modifier = Modifier.height(4.dp))
-                // Status chip
-                Row(
-                    verticalAlignment = Alignment.CenterVertically,
-                    horizontalArrangement = Arrangement.spacedBy(4.dp),
-                    modifier = Modifier
-                        .clip(RoundedCornerShape(6.dp))
-                        .background(statusColor.copy(alpha = 0.15f))
-                        .padding(horizontal = 6.dp, vertical = 2.dp)
-                ) {
-                    Text(statusLabel, color = statusColor, style = MaterialTheme.typography.labelSmall, fontWeight = FontWeight.Medium)
+                Row(verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(4.dp)) {
+                    Icon(statusIcon, contentDescription = null, tint = statusColor, modifier = Modifier.size(14.dp))
+                    val statusText = if (progressDisplay != null) "$statusLabel $progressDisplay" else statusLabel
+                    Text(statusText, color = statusColor, style = MaterialTheme.typography.bodySmall)
                 }
-                Spacer(modifier = Modifier.height(4.dp))
-                // Chapter progress + time
-                Row(
-                    modifier = Modifier.fillMaxWidth(),
-                    horizontalArrangement = Arrangement.SpaceBetween,
-                    verticalAlignment = Alignment.CenterVertically
-                ) {
-                    if (activity.totalChapters != null && activity.totalChapters > 0) {
-                        Text(
-                            "Ch. ${activity.progress} / ${activity.totalChapters}",
-                            color = MaterialTheme.colorScheme.onSurfaceVariant,
-                            style = MaterialTheme.typography.bodySmall
-                        )
-                    } else if (activity.progress > 0) {
-                        Text(
-                            "Ch. ${activity.progress}",
-                            color = MaterialTheme.colorScheme.onSurfaceVariant,
-                            style = MaterialTheme.typography.bodySmall
-                        )
-                    }
-                    Text(
-                        relativeTime,
-                        color = MaterialTheme.colorScheme.onSurfaceVariant.copy(alpha = 0.6f),
-                        style = MaterialTheme.typography.labelSmall
-                    )
+                Spacer(modifier = Modifier.height(2.dp))
+                if (dateStr.isNotBlank()) {
+                    Text(dateStr, color = MaterialTheme.colorScheme.onSurfaceVariant, style = MaterialTheme.typography.bodySmall)
                 }
             }
         }
     }
+}
+
+private fun statusKeyFromAction(actionLower: String): String = when {
+    actionLower.contains("completed") -> "COMPLETED"
+    actionLower.contains("reading") || actionLower.contains("repeating") || actionLower.contains("reread") -> "READING"
+    actionLower.contains("plan") -> "PLANNING"
+    actionLower.contains("paused") || actionLower.contains("hold") -> "ON_HOLD"
+    actionLower.contains("dropped") -> "DROPPED"
+    else -> "READING"
+}
+
+private fun formatHistoryDate(timestamp: Long): String {
+    if (timestamp <= 0) return ""
+    val sdf = SimpleDateFormat("d MMMM, yyyy - HH:mm", Locale.getDefault())
+    return sdf.format(Date(timestamp * 1000))
 }
 
 private fun formatMinutesWatched(minutes: Int?): String {

@@ -398,13 +398,34 @@ class MainViewModel(private val context: Context) : ViewModel() {
             val actResult = anilistManager.getUserActivity()
             actResult.onSuccess { activities ->
                 _userActivity.value = activities
-                _readingCount.value = activities.count { it.status.equals("CURRENT", true) || it.status.equals("REPEATING", true) }
-                _completedCount.value = activities.count { it.status.equals("COMPLETED", true) }
-                _planningCount.value = activities.count { it.status.equals("PLANNING", true) }
-                _onHoldCount.value = activities.count { it.status.equals("PAUSED", true) || it.status.equals("HOLD", true) }
-                _droppedCount.value = activities.count { it.status.equals("DROPPED", true) }
+                val seenMediaIds = mutableMapOf<String, MutableSet<Int>>()
+                for (activity in activities) {
+                    val action = activity.statusAction.uppercase()
+                    val key = when {
+                        action.contains("COMPLETED") -> "COMPLETED"
+                        action.contains("READING") || action.contains("REPEATING") || action.contains("READ") -> "CURRENT"
+                        action.contains("PLAN") -> "PLANNING"
+                        action.contains("PAUSED") || action.contains("HOLD") -> "PAUSED"
+                        action.contains("DROPPED") -> "DROPPED"
+                        else -> continue
+                    }
+                    seenMediaIds.getOrPut(key) { mutableSetOf() }.add(activity.mediaId)
+                }
+                _readingCount.value = seenMediaIds["CURRENT"]?.size ?: 0
+                _completedCount.value = seenMediaIds["COMPLETED"]?.size ?: 0
+                _planningCount.value = seenMediaIds["PLANNING"]?.size ?: 0
+                _onHoldCount.value = seenMediaIds["PAUSED"]?.size ?: 0
+                _droppedCount.value = seenMediaIds["DROPPED"]?.size ?: 0
             }
             actResult.onFailure { log("PROFILE", "Failed to load activity: ${it.message}") }
+            val statsResult = anilistManager.getUserMangaListStats()
+            statsResult.onSuccess { (chapters, manga, score) ->
+                val profile = _userProfile.value
+                if (profile != null) {
+                    _userProfile.value = profile.copy(chaptersRead = chapters, mangaCount = manga, meanScore = score)
+                }
+            }
+            statsResult.onFailure { log("PROFILE", "Failed to load stats: ${it.message}") }
             _isProfileLoading.value = false
         }
     }
