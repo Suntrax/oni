@@ -1112,17 +1112,15 @@ class AniListManager(private val context: Context) {
             if (existing != null) {
                 val anilistIndex = (entry.progress - 1).coerceAtLeast(0)
                 val anilistChapterNum = entry.progress.toDouble()
-                // Only advance the local progress; never regress it, since the
-                // user may have read further locally since the last sync.
-                val shouldAdvance = anilistChapterNum > existing.currentChapterNumber && existing.currentChapterNumber >= 0
+                // AniList is the source of truth — always overwrite local progress.
                 val updated = existing.copy(
                     status = entry.toReadingStatus(),
                     totalChapters = entry.chapters ?: existing.totalChapters,
                     lastReadTimestamp = System.currentTimeMillis(),
                     anilistMediaId = entry.mediaId,
-                    currentChapterIndex = if (shouldAdvance) anilistIndex else existing.currentChapterIndex,
-                    currentChapterNumber = if (shouldAdvance) anilistChapterNum else existing.currentChapterNumber,
-                    scrollProgress = if (shouldAdvance) 0f else existing.scrollProgress
+                    currentChapterIndex = anilistIndex,
+                    currentChapterNumber = anilistChapterNum,
+                    scrollProgress = 0f
                 )
                 trackingManager.updateTracking(updated)
             } else {
@@ -1165,6 +1163,71 @@ class AniListManager(private val context: Context) {
         }
 
         return executeGraphQLWithVariables(mutation, variables, token).map { }
+    }
+
+    /**
+     * Fetch the user's media list entry for a specific manga from AniList.
+     * Returns the entry with progress, or null if not found / not logged in.
+     */
+    suspend fun getMediaListEntry(mediaId: Int): AniListMangaEntry? {
+        val token = getAccessToken() ?: return null
+        val userId = try {
+            val json = prefs.getString(KEY_USER_DATA, null) ?: return null
+            JSONObject(json).optInt("id", -1)
+        } catch (e: Exception) { return null }
+        if (userId < 0) return null
+
+        val query = """
+            query {
+              MediaList(userId: $userId, mediaId: $mediaId, type: MANGA) {
+                media {
+                  id
+                  title { romaji english native }
+                  coverImage { extraLarge large }
+                  siteUrl
+                  chapters
+                }
+                progress
+                status
+                score
+              }
+            }
+        """.trimIndent()
+
+        return withContext(Dispatchers.IO) {
+            try {
+                val jsonPayload = JSONObject().apply { put("query", query) }
+                val body = jsonPayload.toString().toRequestBody("application/json".toMediaType())
+                val request = Request.Builder()
+                    .url(GRAPHQL_URL)
+                    .addHeader("Authorization", "Bearer $token")
+                    .addHeader("Content-Type", "application/json")
+                    .post(body)
+                    .build()
+                val response = client.newCall(request).execute()
+                val responseBody = response.body?.string()
+                if (response.isSuccessful && responseBody != null) {
+                    val root = JSONObject(responseBody)
+                    val data = root.optJSONObject("data")?.optJSONObject("MediaList") ?: return@withContext null
+                    val media = data.optJSONObject("media")
+                    val title = media?.optJSONObject("title")
+                    val romajiTitle = title?.optString("romaji") ?: ""
+                    val englishTitle = title?.optString("english")
+                    AniListMangaEntry(
+                        mediaId = media?.optInt("id") ?: mediaId,
+                        title = englishTitle?.takeIf { it.isNotBlank() } ?: romajiTitle,
+                        englishTitle = englishTitle,
+                        nativeTitle = title?.optString("native"),
+                        coverUrl = media?.optJSONObject("coverImage")?.optString("extraLarge") ?: media?.optJSONObject("coverImage")?.optString("large"),
+                        siteUrl = media?.optString("siteUrl"),
+                        chapters = if (media?.has("chapters") == true && !media.isNull("chapters")) media.optInt("chapters") else null,
+                        progress = data.optInt("progress", 0),
+                        status = data.optString("status", ""),
+                        score = if (data.has("score") && !data.isNull("score")) data.optInt("score") else null
+                    )
+                } else null
+            } catch (e: Exception) { null }
+        }
     }
 
     suspend fun deleteMediaListEntry(mediaId: Int): Result<Unit> {

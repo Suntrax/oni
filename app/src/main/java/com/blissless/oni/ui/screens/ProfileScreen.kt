@@ -461,7 +461,7 @@ private fun AboutMeContent(
 
             Spacer(modifier = Modifier.height(24.dp))
 
-            val hasStats = chaptersRead > 0 || meanScore != null || mangaCount > 0
+            val hasStats = meanScore != null || mangaCount > 0
             if (hasStats) {
                 Row(
                     modifier = Modifier.fillMaxWidth(),
@@ -469,16 +469,9 @@ private fun AboutMeContent(
                 ) {
                     Box(Modifier.weight(1f)) {
                         StatCard(
-                            value = chaptersRead.toString(),
-                            label = "Chapters",
-                            color = MaterialTheme.colorScheme.primary
-                        )
-                    }
-                    Box(Modifier.weight(1f)) {
-                        StatCard(
-                            value = mangaCount.toString(),
-                            label = "Manga",
-                            color = MaterialTheme.colorScheme.tertiary
+                            value = completedCount.toString(),
+                            label = "Finished",
+                            color = StatusCompleted
                         )
                     }
                     Box(Modifier.weight(1f)) {

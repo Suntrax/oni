@@ -831,6 +831,7 @@ class MainViewModel(private val context: Context) : ViewModel() {
             loadAniListDetail(manga.id, manga.coverUrl)
             loadAniListChapters(manga.id)
             loadReadChapters(mangaId)
+            fetchLatestAnilistProgress(manga.id)
         }
     }
 
@@ -856,6 +857,7 @@ class MainViewModel(private val context: Context) : ViewModel() {
                 loadAniListDetail(mediaId, manga.coverUrl)
                 loadAniListChapters(mediaId)
                 manga.mangaId?.let { loadReadChapters(it) }
+                fetchLatestAnilistProgress(mediaId)
             }
         } else {
             // Legacy tracking data without AniList ID - try looking up by title
@@ -877,6 +879,7 @@ class MainViewModel(private val context: Context) : ViewModel() {
                             loadAniListDetail(match.id, match.coverUrl ?: manga.coverUrl)
                             loadAniListChapters(match.id)
                             loadReadChapters("anilist_${match.id}")
+                            fetchLatestAnilistProgress(match.id)
                         } else {
                             _mangaDetail.value = null
                             _isLoading.value = false
@@ -1719,7 +1722,11 @@ class MainViewModel(private val context: Context) : ViewModel() {
             ReadingStatus.ON_HOLD -> "PAUSED"
             ReadingStatus.DROPPED -> "DROPPED"
         }
-        val safeProgress = maxOf(track.currentChapterIndex + 1, 0)
+        val safeProgress = if (track.currentChapterNumber > 0) {
+            track.currentChapterNumber.toInt()
+        } else {
+            maxOf(track.currentChapterIndex + 1, 0)
+        }
         viewModelScope.launch {
             val result = anilistManager.updateMediaListEntry(mediaId, safeProgress, anilistStatus)
             result.fold(
@@ -1826,6 +1833,40 @@ class MainViewModel(private val context: Context) : ViewModel() {
         } else {
             _readChapterIndices.value = emptySet()
             _nextChapterToRead.value = 0
+        }
+    }
+
+    /**
+     * Fetch the latest chapter progress for the current manga from AniList and
+     * update the local tracking if it is higher (never regress).
+     *
+     * Called after [loadReadChapters] so the UI first shows local progress and
+     * then corrects itself once the AniList response arrives.
+     */
+    fun fetchLatestAnilistProgress(mediaId: Int) {
+        if (!anilistManager.isLoggedIn()) return
+        viewModelScope.launch {
+            val entry = anilistManager.getMediaListEntry(mediaId) ?: return@launch
+            if (entry.progress <= 0) return@launch
+            val mangaId = "anilist_$mediaId"
+            val existing = trackingManager.getMangaTracking(mangaId) ?: return@launch
+
+            val anilistChapterNum = entry.progress.toDouble()
+            // AniList is the source of truth — always overwrite local progress.
+            val anilistIndex = (entry.progress - 1).coerceAtLeast(0)
+            val updated = existing.copy(
+                currentChapterIndex = anilistIndex,
+                currentChapterNumber = anilistChapterNum,
+                scrollProgress = 0f,
+                lastReadTimestamp = System.currentTimeMillis()
+            )
+            trackingManager.updateTracking(updated)
+            refreshTrackingLists()
+            // Refresh the UI chapter indicators if chapters are already loaded.
+            if (_chapters.value.isNotEmpty()) {
+                recalculateNextChapterFromTracking(_chapters.value)
+            }
+            log("ANILIST", "Fetched live progress: chapter $anilistChapterNum for media $mediaId")
         }
     }
 
